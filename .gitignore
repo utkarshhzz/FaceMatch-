@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Environment variables
+.env
+.env.local
+
+# Database
+*.db
+*.sqlite
+
+# Logs
+logs/
+*.log
+
+# Uploads and temp data
+data/temp/*
+data/uploads/*
+backend/data/temp/*
+backend/data/uploads/*
+
+# Keep directory structure
+!data/temp/.gitkeep
+!data/uploads/.gitkeep
+!backend/data/temp/.gitkeep
+!backend/data/uploads/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Model weights (DeepFace downloads)
+*.h5
+*.pb
+.deepface/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
