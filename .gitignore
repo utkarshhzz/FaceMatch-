@@ -55,3 +55,8 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Documentation (keep local only)
+COMPLETE_PROJECT_GUIDE.md
+COPILOT_INSTRUCTIONS.md
+PROJECT_DOCUMENTATION.md
