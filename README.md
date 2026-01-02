@@ -137,4 +137,4 @@ Private - Internal Use Only
 
 ## Author
 
-Built with ❤️ for enterprise face recognition
+Built by Utkarsh
