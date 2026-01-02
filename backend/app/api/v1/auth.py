@@ -26,44 +26,55 @@ async def register_user(user_data: UserCreate):
     
     # Create database session directly
     async with AsyncSessionLocal() as db:
-        
-        # Check if user already exists
-        result = await db.execute(
-            select(User).where(User.email == user_data.email)
-        )
-        existing_user = result.scalar_one_or_none()
-        
-        if existing_user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
+        try:
+            # Check if user already exists
+            result = await db.execute(
+                select(User).where(User.email == user_data.email)
             )
-        
-        # Validate password strength
-        is_valid, error_msg = validate_password_strength(user_data.password)
-        if not is_valid:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=error_msg
+            existing_user = result.scalar_one_or_none()
+            
+            if existing_user:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Email already registered"
+                )
+            
+            # Validate password strength
+            is_valid, error_msg = validate_password_strength(user_data.password)
+            if not is_valid:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=error_msg
+                )
+            
+            # Create new user
+            new_user = User(
+                email=user_data.email,
+                hashed_password=hash_password(user_data.password),
+                full_name=user_data.full_name,
+                role=UserRole.USER,
+                is_active=True,
+                is_verified=False
             )
-        
-        # Create new user
-        new_user = User(
-            email=user_data.email,
-            hashed_password=hash_password(user_data.password),
-            full_name=user_data.full_name,
-            role=UserRole.USER,
-            is_active=True,
-            is_verified=False
-        )
-        
-        db.add(new_user)
-        await db.commit()
-        await db.refresh(new_user)
-        
-        logger.info(f"New user registered: {new_user.email} (ID: {new_user.id})")
-        
-        return new_user
+            
+            db.add(new_user)
+            await db.commit()
+            await db.refresh(new_user)
+            
+            logger.info(f"New user registered: {new_user.email} (ID: {new_user.id})")
+            
+            return new_user
+            
+        except HTTPException:
+            await db.rollback()
+            raise
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"Registration error: {str(e)}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Registration failed: {str(e)}"
+            )
 
 
 @router.post("/login", response_model=Token)
