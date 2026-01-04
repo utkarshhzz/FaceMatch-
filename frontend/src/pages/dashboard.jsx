@@ -2,7 +2,7 @@ import { useState,useEffect }  from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import {
-    Logout,
+    LogOut,
     User,
     Upload,
     Search,
@@ -13,25 +13,25 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {Card,CardContent,CardHeader,CardTitle,CardDescription} from "@/components/ui/card";
-import { Avatar,AvatarFallback } from "@/components/mode-toggle";
+import { Avatar,AvatarFallback } from "@/components/ui/avatar";
+import { ModeToggle } from "@/components/mode-toggle";
 
 
 export default function Dashboard() {
-    const {user,logout}=useAuth();
-    const navigate= useNavigate();
-    const [stats,setStats]=useState({
-        totalFaces:0,
-        matchesFound:0,
-        recentActivity:[]
+    const {user, logout, loading} = useAuth();
+    const navigate = useNavigate();
+    const [stats, setStats] = useState({
+        totalFaces: 0,
+        matchesFound: 0,
+        recentActivity: []
     });
 
-
-    useEffect(()=>{
-        //redirecting user if not logged in
-        if(!user) {
+    useEffect(() => {
+        // Don't redirect while loading
+        if (!loading && !user) {
             navigate('/login');
         }
-    }, [user,navigate]);
+    }, [user, loading, navigate]);
 
     const handleLogout= () => {
         logout();
@@ -49,6 +49,18 @@ export default function Dashboard() {
             .toUpperCase()
             .slice(0,2);
     };
+
+    // Show loading spinner while checking authentication
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="h-12 w-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-slate-600 dark:text-slate-400">Loading...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">

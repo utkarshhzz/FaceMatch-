@@ -20,13 +20,20 @@ export default function Login() {
         e.preventDefault();
         setLoading(true);
 
-        const success = await login(email, password);
-        
-        if (success) {
-            navigate('/dashboard');
+        try {
+            const success = await login(email, password);
+            
+            if (success) {
+                // Small delay to ensure user state is loaded
+                setTimeout(() => {
+                    navigate('/dashboard');
+                }, 100);
+            }
+        } catch (error) {
+            console.error('Login error:', error);
+        } finally {
+            setLoading(false);
         }
-        
-        setLoading(false);
     };
 
     return (
