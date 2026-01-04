@@ -12,7 +12,6 @@ import api from "@/services/api";
 
 export default function RegisterFace() {
     //State variables 
-    const [personName,setPersonName]=useState('');
     const [selectedImage,setSelectedImage]=useState(null);
     const [previewUrl,setPreviewUrl]=useState(null);
     const [loading,setLoading]=useState(false);
@@ -53,18 +52,13 @@ export default function RegisterFace() {
             toast.error('Please selec an Image');
             return;
         }
-        if(!personName.trim()) {
-            toast.error('Please enter Person Name');
-            return;
-        }
 
         setLoading(true);
 
         try {
             //Creating formdata to senf files
             const formdata= new FormData();
-            formdata.append('image',selectedImage);
-            formdata.append('person_name',personName);
+            formdata.append('file',selectedImage);
 
             //sending to backend
             const response=await api.post('/faces/register',formdata, {
@@ -74,11 +68,10 @@ export default function RegisterFace() {
             });
 
             toast.success('Face Registered Successfully', {
-                description:`${personName}'s face has been registered.`,
+                description:`Your face has been registered.`,
             });
 
             //reset the form
-            setPersonName('');
             setSelectedImage(null);
             setPreviewUrl(null);
 
@@ -89,7 +82,7 @@ export default function RegisterFace() {
         } catch(error) {
             console.error('Registration failed',error);
             toast.error('Failed to register face', {
-                description:error.response?.data?.message || 'Please try again.',
+                description:error.response?.data?.detail || 'Please try again.',
             });
         } finally {
             setLoading(false);
@@ -100,7 +93,6 @@ export default function RegisterFace() {
     const handleClear= () => {
         setSelectedImage(null);
         setPreviewUrl(null);
-        setPersonName('');
     };
 
     return (
@@ -116,8 +108,8 @@ export default function RegisterFace() {
                     <ArrowLeft className="h-4 w-4 mr-2">Back to Dashboard</ArrowLeft>
                     </Button>
 
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Register New Face</h1>
-                    <p className="text-slate-600 dark:text-slate-400 mt-2">Upload a photo and register a new face to the database</p>
+                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Register Your Face</h1>
+                    <p className="text-slate-600 dark:text-slate-400 mt-2">Upload your photo to register your face</p>
                 </div>
             </div>
 
@@ -184,41 +176,41 @@ export default function RegisterFace() {
                         </CardContent>
                     </Card>
 
-                    {/* right side person details */}
+                    {/* right side tips */}
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
-                                <User className="h-5 w-5"/>
-                                Person Details
+                                <CheckCircle2 className="h-5 w-5"/>
+                                Tips for Best Results
                             </CardTitle>
                             <CardDescription>
-                                Enter information about the person
+                                Follow these guidelines for accurate face registration
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            {/* person name input  */}
-                            <div className="space-y-2">
-                                <Label htmlFor="fullname">Full Name</Label>
-                                <Input
-                                    id="personName"
-                                    type="text"
-                                    placeholder="Utkarsh Kumar"
-                                    value={personName}
-                                    onChange={(e) => setPersonName(e.target.value)}
-                                    required                       
-                                />
-                                <p className="text-xs text-muted-foreground">Enter full name of person in the photo</p>
-                            </div>
-                            
                             {/* info card */}
                             <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-lg p-4">
-                            <h4 className="text-sm font-medium text-blue-900 dark:text-blue-400 mb-2">Tips for best results</h4>
-                            <ul className="text-xs text-blue-800 dark:text-blue-300 space-y-1">
-                                <li>• Use a clear, well-lit photo</li>
-                                <li>• Face should be clearly visible</li>
-                                <li>• Avoid sunglasses or face coverings</li>
-                                <li>• Front-facing photos work best</li>
-
+                            <ul className="text-sm text-blue-800 dark:text-blue-300 space-y-2">
+                                <li className="flex items-start gap-2">
+                                    <span className="text-blue-600 dark:text-blue-400">✓</span>
+                                    <span>Use a clear, well-lit photo</span>
+                                </li>
+                                <li className="flex items-start gap-2">
+                                    <span className="text-blue-600 dark:text-blue-400">✓</span>
+                                    <span>Face should be clearly visible</span>
+                                </li>
+                                <li className="flex items-start gap-2">
+                                    <span className="text-blue-600 dark:text-blue-400">✓</span>
+                                    <span>Avoid sunglasses or face coverings</span>
+                                </li>
+                                <li className="flex items-start gap-2">
+                                    <span className="text-blue-600 dark:text-blue-400">✓</span>
+                                    <span>Front-facing photos work best</span>
+                                </li>
+                                <li className="flex items-start gap-2">
+                                    <span className="text-blue-600 dark:text-blue-400">✓</span>
+                                    <span>Neutral expression recommended</span>
+                                </li>
                             </ul>
                             </div>
 
@@ -228,7 +220,7 @@ export default function RegisterFace() {
                             <Button
                             type="submit"
                             className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
-                            disabled={loading|| !selectedImage || !personName}
+                            disabled={loading|| !selectedImage}
 
                             >
                                {loading? (

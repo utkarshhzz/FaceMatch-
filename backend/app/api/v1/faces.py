@@ -1,6 +1,6 @@
 ### Fae recongnition endpoints
 
-from fastapi import APIRouter,UploadFile,File,Header,HTTPException,status
+from fastapi import APIRouter,UploadFile,File,Header,HTTPException,status,Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import os
