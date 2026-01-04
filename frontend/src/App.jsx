@@ -4,6 +4,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import { ThemeProvider } from "@/components/theme-provider"
 import './App.css'
+import Dashboard from './pages/dashboard';
 
 function App() {
   return (
@@ -13,6 +14,8 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+
             <Route path="/" element={<Navigate to="/login" />} />
           </Routes>
         </BrowserRouter>
