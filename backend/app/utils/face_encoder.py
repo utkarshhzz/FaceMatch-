@@ -13,24 +13,41 @@ class FaceEncoder:
         logger.info("Initialised FaceEncoder with {model_name} model")
         
     def extract_embedding(self,image_path:str)-> Optional[np.ndarray]:
-        try:
-            embedding_objs=DeepFace.represent(
-                img_path=image_path,
-                model_name=self.model_name,
-                enforce_detection=False,
-                detector_backend='opencv'
-            )
-            if not embedding_objs:
-                logger.error("No embedding extracted")
-                return None
-            #Get frist embeding (in case of multiple faces)
-            embedding= np.array(embedding_objs[0]["embedding"])
-            
-            logger.info(f"Extracted embedding of hsape{embedding.shape}")
-            return embedding
-        except Exception as e:
-            logger.error(f"Error extracting embedding :{e}")
-            return None
+        """
+        Extract face embedding using DeepFace with multiple detector backends for robustness.
+        Tries modern detectors that work with glasses, different lighting, etc.
+        """
+        # Try multiple detector backends for better robustness
+        detector_backends = ['retinaface', 'mtcnn', 'ssd', 'opencv']
+        
+        for backend in detector_backends:
+            try:
+                logger.info(f"Trying embedding extraction with detector: {backend}")
+                
+                embedding_objs = DeepFace.represent(
+                    img_path=image_path,
+                    model_name=self.model_name,
+                    enforce_detection=False,
+                    detector_backend=backend
+                )
+                
+                if not embedding_objs:
+                    logger.debug(f"No embedding extracted with {backend}")
+                    continue
+                    
+                # Get first embedding (in case of multiple faces)
+                embedding = np.array(embedding_objs[0]["embedding"])
+                
+                logger.info(f"Extracted embedding of shape {embedding.shape} using {backend}")
+                return embedding
+                
+            except Exception as e:
+                logger.debug(f"Embedding extraction failed with {backend}: {str(e)}")
+                continue
+        
+        # If all backends failed
+        logger.error("Failed to extract embedding with all detector backends")
+        return None
         
     @staticmethod
     def serialize_embedding(embedding: np.ndarray) -> bytes:

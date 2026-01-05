@@ -4,16 +4,22 @@ import cv2
 import numpy as np
 from typing import Optional,Dict,Tuple
 from app.core.logger import logger
+from deepface import DeepFace
 
 class FaceDetector:
-    """Detects faces in image and accesses quality"""
+    """Detects faces in image and accesses quality using modern deep learning models"""
     
     def __init__(self):
-        #loading haarcascade for face detection
-        cascade_path=cv2.data.haarcascades+'haarcascade_frontalface_default.xml'
-        self.face_cascade= cv2.CascadeClassifier(cascade_path)
+        # Use multiple detector backends for robustness
+        # Priority: retinaface (best) -> mtcnn -> ssd -> opencv (fallback)
+        self.detector_backends = ['retinaface', 'mtcnn', 'ssd', 'opencv']
+        logger.info(f"Initialized FaceDetector with backends: {self.detector_backends}")
         
     def detect_face(self,image_path:str) ->Optional[Dict]:
+        """
+        Detect face using DeepFace with multiple backend detectors.
+        Tries modern detectors first (RetinaFace, MTCNN) then falls back to simpler ones.
+        """
         try:
             #read image
             img=cv2.imread(image_path)
@@ -21,59 +27,65 @@ class FaceDetector:
                 logger.error(f"Failed to load image:{image_path}")
                 return None
             
-            #convert to grey scale for detection
-            gray=cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+            # Try each detector backend until one succeeds
+            for backend in self.detector_backends:
+                try:
+                    logger.info(f"Trying face detection with backend: {backend}")
+                    
+                    # Use DeepFace to detect and extract face
+                    face_objs = DeepFace.extract_faces(
+                        img_path=image_path,
+                        detector_backend=backend,
+                        enforce_detection=False,
+                        align=True
+                    )
+                    
+                    if not face_objs or len(face_objs) == 0:
+                        logger.debug(f"No face detected with {backend}")
+                        continue
+                    
+                    # Get the face with highest confidence
+                    best_face = max(face_objs, key=lambda x: x.get('confidence', 0))
+                    
+                    # Check if confidence is reasonable (even with enforce_detection=False)
+                    confidence = best_face.get('confidence', 0)
+                    if confidence < 0.5:
+                        logger.debug(f"Low confidence ({confidence}) with {backend}")
+                        continue
+                    
+                    facial_area = best_face['facial_area']
+                    x = facial_area['x']
+                    y = facial_area['y']
+                    w = facial_area['w']
+                    h = facial_area['h']
+                    
+                    logger.info(f"Face detected successfully with {backend}! Confidence: {confidence:.2f}, Box: ({x},{y},{w},{h})")
+                    
+                    # Extract face region for quality assessment
+                    face_roi = img[y:y+h, x:x+w]
+                    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                    face_gray = gray[y:y+h, x:x+w]
+                    
+                    # Calculate quality metrics
+                    quality_metrics = self._assess_quality(face_roi, face_gray)
+                    
+                    return {
+                        "box": [int(x), int(y), int(w), int(h)],
+                        "confidence": float(confidence),
+                        "detector": backend,
+                        **quality_metrics
+                    }
+                    
+                except Exception as e:
+                    logger.debug(f"Backend {backend} failed: {str(e)}")
+                    continue
             
-            #Try multiple detection parameters for better results
-            # First attempt with standard parameters
-            faces=self.face_cascade.detectMultiScale(
-                gray,
-                scaleFactor=1.1,
-                minNeighbors=5,
-                minSize=(30,30)
-            )
+            # If all backends failed
+            logger.warning(f"No face detected with any backend. Image size: {img.shape}")
+            return None
             
-            # If no face found, try with more lenient parameters
-            if len(faces) == 0:
-                faces=self.face_cascade.detectMultiScale(
-                    gray,
-                    scaleFactor=1.05,
-                    minNeighbors=3,
-                    minSize=(20,20)
-                )
-            
-            # If still no face, try even more lenient
-            if len(faces) == 0:
-                faces=self.face_cascade.detectMultiScale(
-                    gray,
-                    scaleFactor=1.02,
-                    minNeighbors=2,
-                    minSize=(15,15)
-                )
-            
-            if len(faces)==0:
-                logger.warning("No face detected")
-                return None
-            
-            if len(faces) >1:
-                logger.warning(f"Multiple faces detected:({len(faces)}), using largesr")
-                
-            #Seleting largest face by area
-            largest_face= max(faces,key=lambda f: f[2]*f[3])
-            x,y,w,h= largest_face
-            
-            #Extract face region
-            face_roi= img[y:y+h,x:x+w]
-            
-            #Calculate quality metrics
-            quality_metrrics= self._assess_quality(face_roi,gray[y:y+h,x:x+w])
-            return {
-                "box":[int(x),int(y),int(w),int(h)],
-                "confidence":0.95,
-                **quality_metrrics
-            }
         except Exception as e:
-            logger.error(f"Error detecting face: {e}")
+            logger.error(f"Error detecting face: {e}", exc_info=True)
             return None
         
     def _assess_quality(self,face_rgb:np.ndarray,face_gray:np.ndarray)-> Dict:

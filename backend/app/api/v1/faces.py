@@ -65,18 +65,16 @@ async def register_face(
     file:UploadFile=File(...),
     authorization:str=Header(None)
 ):
-    """Uplaod and registe a face image
-    1)pehle uplaoded image save karenge
-    2)face detect karenge and quality cehck karenge
-    3)embedding extract karenge
-    4)database me save karenge
+    """Upload and register a face image for an employee (Admin only)
+    Admin provides employee_id, full_name, and face photo
+    System creates or finds the employee user and registers their face
     """
     
-    #Get current user
-    user=await get_current_user_from_token(authorization)
+    #Get current admin user
+    admin_user=await get_current_user_from_token(authorization)
     
     # Check if user is admin
-    if user.role != UserRole.ADMIN:
+    if admin_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only administrators can register employee faces"
@@ -88,80 +86,122 @@ async def register_face(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="File must be an image"
         )
+    
+    try:
+        # Find or create employee user
+        async with AsyncSessionLocal() as db:
+            # Check if employee already exists
+            result = await db.execute(
+                select(User).where(User.employee_id == employee_id)
+            )
+            employee_user = result.scalar_one_or_none()
+            
+            if not employee_user:
+                # Create new employee user with temporary email and password
+                from app.core.security import hash_password
+                employee_user = User(
+                    employee_id=employee_id,
+                    full_name=full_name,
+                    email=f"{employee_id}@temp.local",  # Temporary email
+                    hashed_password=hash_password("changeme123"),  # Temporary password
+                    role=UserRole.USER,
+                    is_active=True,
+                    is_verified=False
+                )
+                db.add(employee_user)
+                await db.commit()
+                await db.refresh(employee_user)
+                logger.info(f"Created new employee user: {employee_id}")
         
-    #creating uplaod directory
-    
-    upload_dir=f"./data/uploads/{user.id}"
-    os.makedirs(upload_dir,exist_ok=True)
-    
-    #generatig unique filename
-    file_extension=file.filename.split(".")[-1]
-    unique_filename=f"{uuid.uuid4()}.{file_extension}"
-    file_path=os.path.join(upload_dir,unique_filename)
-    
-    #save the file at the lcoation
-    with open(file_path,'wb') as f:
-        content=await file.read()
-        f.write(content)
+        #creating upload directory for this employee
+        upload_dir=f"./data/uploads/{employee_user.id}"
+        os.makedirs(upload_dir,exist_ok=True)
         
-    logger.info(f"Saved uploaded image to {file_path}")
-    
-    
-    #FAce detection and wuality check
-    face_info=face_detector.detect_face(file_path)
-    if not face_info:
-        os.remove(file_path)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No face detected in the image"
-        )
-    #CHecking quality
-    if face_info['quality_score'] <0.5:
-        os.remove(file_path)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Face quality too low: {face_info['quality_score']:.2f}"
-        )
-    
-    #Extract embedding
-    embedding=face_encoder.extract_embedding(file_path)
-    
-    if embedding is None:
-        os.remove(file_path)
+        #generating unique filename
+        file_extension=file.filename.split(".")[-1]
+        unique_filename=f"{uuid.uuid4()}.{file_extension}"
+        file_path=os.path.join(upload_dir,unique_filename)
+        
+        #save the file at the location
+        with open(file_path,'wb') as f:
+            content=await file.read()
+            f.write(content)
+            
+        logger.info(f"Saved uploaded image to {file_path}")
+        
+        
+        #Face detection and quality check
+        face_info=face_detector.detect_face(file_path)
+        if not face_info:
+            os.remove(file_path)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No face detected in the image"
+            )
+        #Checking quality
+        if face_info['quality_score'] <0.5:
+            os.remove(file_path)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Face quality too low: {face_info['quality_score']:.2f}"
+            )
+        
+        #Extract embedding
+        embedding=face_encoder.extract_embedding(file_path)
+        
+        if embedding is None:
+            os.remove(file_path)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to extract face embedding"
+            )
+            
+        #Save to database
+        async with AsyncSessionLocal() as db:
+            #creating new face record
+            new_face=Face(
+                user_id=employee_user.id,
+                original_image_path=file_path,
+                processed_image_path=file_path,
+                detection_confidence=face_info["confidence"],
+                face_box=str(face_info["box"]),
+                quality_score=face_info["quality_score"],
+                is_blurry=face_info["is_blurry"],
+                brightness_score=face_info["brightness"],
+                is_primary=False
+            )
+            db.add(new_face)
+            await db.commit()
+            await db.refresh(new_face)
+            
+            #Creating encoding record
+            new_encoding=Encoding(
+                face_id=new_face.id,
+                embedding=face_encoder.serialize_embedding(embedding),
+                model_name=face_encoder.model_name,
+                model_version="1.0"
+            )
+            db.add(new_encoding)
+            await db.commit()
+            logger.info(f"Registered face {new_face.id} for employee {employee_id} ({full_name})")
+            
+            # Return proper response format
+            return FaceRegisterResponse(
+                success=True,
+                message=f"Face registered successfully for {full_name}",
+                employee_id=employee_id,
+                face_id=new_face.id,
+                image_url=file_path
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error registering face: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to extract face embedding"
+            detail=f"Failed to register face: {str(e)}"
         )
-        
-    #Saveto dataabase
-    async with AsyncSessionLocal() as db:
-        #creating new face record
-        new_face=Face(
-            user_id=user.id,
-            original_image_path=file_path,
-            processed_image_path=file_path,
-            detection_confidence=face_info["confidence"],
-            face_box=str(face_info["box"]),
-            quality_score=face_info["quality_score"],
-            is_blurry=face_info["is_blurry"],
-            brightness_score=face_info["brightness"],
-            is_primary=False  #user khudse baad me set kar sakta haiu
-        )
-        db.add(new_face)
-        await db.commit()
-        await db.refresh(new_face)
-        
-        #Creating encoding record
-        new_encoding=Encoding(
-            face_id=new_face.id,
-            embedding=face_encoder.serialize_embedding(embedding),
-            model_name=face_encoder.model_name,
-            model_version="1.0"
-        )
-        db.add(new_encoding)
-        await db.commit()
-        logger.info(f"Regitered face {new_face.id} for usder {user.email}")
-        return new_face
     
 @router.post("/match",response_model=FaceMatchResponse)
 async def match_face(file: UploadFile=File(...)):
@@ -287,35 +327,57 @@ async def match_face_from_camera(
     No authentication required for quick face matching.
     """
     
-    # Save temporary file
-    temp_dir = "./data/temp"
-    os.makedirs(temp_dir, exist_ok=True)
-    
-    temp_filename = f"{uuid.uuid4()}.{file.filename.split('.')[-1]}"
-    temp_path = os.path.join(temp_dir, temp_filename)
-    
-    with open(temp_path, "wb") as f:
-        content = await file.read()
-        f.write(content)
-    
     try:
+        logger.info(f"Received camera capture: {file.filename}, content_type: {file.content_type}")
+        
+        # Save temporary file
+        temp_dir = "./data/temp"
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        temp_filename = f"{uuid.uuid4()}.{file.filename.split('.')[-1]}"
+        temp_path = os.path.join(temp_dir, temp_filename)
+        
+        logger.info(f"Saving to temp path: {temp_path}")
+        
+        with open(temp_path, "wb") as f:
+            content = await file.read()
+            f.write(content)
+            logger.info(f"Saved {len(content)} bytes")
+        
         # Detect face
+        logger.info("Starting face detection...")
         face_info = face_detector.detect_face(temp_path)
         
         if not face_info:
+            logger.warning("No face detected in image")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="No face detected in image"
             )
         
+        logger.info(f"Face detected: {face_info}")
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in face detection: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Face detection error: {str(e)}"
+        )
+        
         # Extract embedding
+        logger.info("Extracting face embedding...")
         query_embedding = face_encoder.extract_embedding(temp_path)
         
         if query_embedding is None:
+            logger.error("Failed to extract embedding")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to extract face embedding"
             )
+        
+        logger.info(f"Embedding extracted, shape: {query_embedding.shape}")
         
         # Compare with all faces in database
         async with AsyncSessionLocal() as db:
@@ -326,6 +388,7 @@ async def match_face_from_camera(
             )
             
             all_encodings = result.all()
+            logger.info(f"Comparing against {len(all_encodings)} faces in database")
             
             matches = []
             for encoding, face, user in all_encodings:
@@ -357,10 +420,19 @@ async def match_face_from_camera(
                 threshold=0.6
             )
     
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in match-camera: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Matching error: {str(e)}"
+        )
     finally:
         # Clean up temp file
         if os.path.exists(temp_path):
             os.remove(temp_path)
+            logger.info(f"Cleaned up temp file: {temp_path}")
 
 
 # ============================================

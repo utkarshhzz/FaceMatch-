@@ -51,3 +51,8 @@ opencv-python-headless
 deepface
 tf-keras
 pillow
+
+# Additional face detection models for DeepFace
+# These provide better detection with glasses, different angles, lighting
+retina-face>=0.0.1  # RetinaFace - Best accuracy
+mtcnn>=0.1.0  # MTCNN - Good for various angles

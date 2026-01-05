@@ -16,6 +16,8 @@ export default function RegisterFace() {
     const [selectedImage,setSelectedImage]=useState(null);
     const [previewUrl,setPreviewUrl]=useState(null);
     const [loading,setLoading]=useState(false);
+    const [employeeId, setEmployeeId] = useState('');
+    const [fullName, setFullName] = useState('');
     const {user}= useAuth();
     const navigate=useNavigate();
     const [captureMode,setCaptureMode]=useState('upload'); //upload or camera
@@ -51,16 +53,28 @@ export default function RegisterFace() {
         e.preventDefault();
 
         if(!selectedImage) {
-            toast.error('Please selec an Image');
+            toast.error('Please select an image');
+            return;
+        }
+
+        if(!employeeId.trim()) {
+            toast.error('Please enter employee ID');
+            return;
+        }
+
+        if(!fullName.trim()) {
+            toast.error('Please enter full name');
             return;
         }
 
         setLoading(true);
 
         try {
-            //Creating formdata to senf files
+            //Creating formdata to send files
             const formdata= new FormData();
             formdata.append('file',selectedImage);
+            formdata.append('employee_id', employeeId.trim());
+            formdata.append('full_name', fullName.trim());
 
             //sending to backend
             const response=await api.post('/faces/register',formdata, {
@@ -70,21 +84,29 @@ export default function RegisterFace() {
             });
 
             toast.success('Face Registered Successfully', {
-                description:`Your face has been registered.`,
+                description:`Employee ${fullName} (ID: ${employeeId}) has been registered.`,
             });
 
             //reset the form
             setSelectedImage(null);
             setPreviewUrl(null);
+            setEmployeeId('');
+            setFullName('');
 
             //eredirect ti dashboard ater 2 seconds
             setTimeout(() => {
                 navigate('/dashboard');
             },2000);
         } catch(error) {
-            console.error('Registration failed',error);
+            console.error('Registration failed', error);
+            console.error('Error response:', error.response?.data);
+            console.error('Error status:', error.response?.status);
+            
+            const errorMessage = error.response?.data?.detail || error.message || 'Please try again.';
+            
             toast.error('Failed to register face', {
-                description:error.response?.data?.detail || 'Please try again.',
+                description: errorMessage,
+                duration: 5000,
             });
         } finally {
             setLoading(false);
@@ -118,6 +140,46 @@ export default function RegisterFace() {
             {/* MAin Content */}
             <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 <form onSubmit={handleSubmit}>
+                
+                {/* Employee Details Section */}
+                <Card className="mb-6">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <User className="h-5 w-5"/>
+                            Employee Details
+                        </CardTitle>
+                        <CardDescription>
+                            Enter employee information
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="employeeId">Employee ID *</Label>
+                                <Input
+                                    id="employeeId"
+                                    type="text"
+                                    placeholder="Enter employee ID"
+                                    value={employeeId}
+                                    onChange={(e) => setEmployeeId(e.target.value)}
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="fullName">Full Name *</Label>
+                                <Input
+                                    id="fullName"
+                                    type="text"
+                                    placeholder="Enter full name"
+                                    value={fullName}
+                                    onChange={(e) => setFullName(e.target.value)}
+                                    required
+                                />
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
                     {/* left side image uplaoder  */}
