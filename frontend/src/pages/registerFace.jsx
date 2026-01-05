@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { Upload, ArrowLeft, User, Loader2, CheckCircle2, Image as ImageIcon } from "lucide-react";
+import { Upload, ArrowLeft, User, Loader2, CheckCircle2, Image as ImageIcon, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import api from "@/services/api";
+import WebcamCapture from "@/components/WebcamCapture";
 
 
 export default function RegisterFace() {
@@ -17,6 +18,7 @@ export default function RegisterFace() {
     const [loading,setLoading]=useState(false);
     const {user}= useAuth();
     const navigate=useNavigate();
+    const [captureMode,setCaptureMode]=useState('upload'); //upload or camera
 
     //Handling image
     const handleImageSelect=(e) => {
@@ -123,14 +125,45 @@ export default function RegisterFace() {
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <ImageIcon className="h-5 w-5"/>
-                                Upload Photo
+                                Add Your Photo
                             </CardTitle>
                             <CardDescription>
-                                Select a clear photo with visible face
+                                Choose how to add your face photo
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
 
+                            {/* Mode Toggle Buttons */}
+                            <div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                                <Button
+                                    type="button"
+                                    variant={captureMode === 'upload' ? 'default' : 'ghost'}
+                                    className="flex-1"
+                                    onClick={() => {
+                                        setCaptureMode('upload');
+                                        handleClear();
+                                    }}
+                                >
+                                    <Upload className="h-4 w-4 mr-2" />
+                                    Upload File
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant={captureMode === 'camera' ? 'default' : 'ghost'}
+                                    className="flex-1"
+                                    onClick={() => {
+                                        setCaptureMode('camera');
+                                        handleClear();
+                                    }}
+                                >
+                                    <Camera className="h-4 w-4 mr-2" />
+                                    Use Camera
+                                </Button>
+                            </div>
+
+                            {/* Upload Mode */}
+                            {captureMode === 'upload' && (
+                            <>
                             {/* Preview area */}
                             <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-6 text-center">
                                 {previewUrl? (
@@ -171,7 +204,21 @@ export default function RegisterFace() {
                                     Clear Selection
                                 </Button>
                             )}
-                            
+                            </>
+                            )}
+
+                            {/* Camera Mode */}
+                            {captureMode === 'camera' && (
+                                <WebcamCapture
+                                    onCapture={(file) => {
+                                        setSelectedImage(file);
+                                        const url = URL.createObjectURL(file);
+                                        setPreviewUrl(url);
+                                    }}
+                                    title="Capture Your Face"
+                                    description="Position your face in the oval and click capture"
+                                />
+                            )}
 
                         </CardContent>
                     </Card>
