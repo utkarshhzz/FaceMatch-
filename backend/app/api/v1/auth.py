@@ -194,3 +194,24 @@ async def get_current_user_info(authorization: str = Header(None)):
     user = await get_user_from_token(token)
     
     return user
+
+
+@router.get("/user-by-employee/{employee_id}")
+async def get_user_by_employee_id(employee_id: str):
+    """
+    Get user ID by employee ID (for attendance marking)
+    """
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(User).where(User.employee_id == employee_id)
+        )
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Employee not found"
+            )
+        
+        return {"id": user.id, "employee_id": user.employee_id, "full_name": user.full_name}
+

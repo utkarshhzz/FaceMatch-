@@ -95,22 +95,24 @@ export default function LiveAttendance() {
             console.log("Match response:", matchResponse.data);
             const matchData = matchResponse.data;
 
-            if (matchData.matched && matchData.best_match) {
-                const match = matchData.best_match;
+            if (matchData.match_found) {
+                console.log("Face matched! Marking attendance for employee:", matchData.employee_id);
                 
-                console.log("Face matched! Marking attendance for user:", match.user_id);
+                // Find user_id by employee_id
+                const userResponse = await api.get(`/auth/user-by-employee/${matchData.employee_id}`);
+                const userId = userResponse.data.id;
                 
                 // Mark attendance
                 const attendanceResponse = await api.post("/faces/attendance/mark", {
-                    user_id: match.user_id
+                    user_id: userId
                 });
 
                 console.log("Attendance response:", attendanceResponse.data);
                 const attendanceData = attendanceResponse.data;
 
                 setLastMatch({
-                    name: match.user_name,
-                    similarity: match.similarity,
+                    name: matchData.full_name,
+                    similarity: matchData.confidence,
                     timestamp: new Date().toLocaleTimeString(),
                     success: attendanceData.success,
                     message: attendanceData.message
@@ -118,7 +120,7 @@ export default function LiveAttendance() {
 
                 if (attendanceData.success) {
                     toast.success(`Attendance Marked!`, {
-                        description: `Welcome ${match.user_name}! Similarity: ${(match.similarity * 100).toFixed(1)}%`
+                        description: `Welcome ${matchData.full_name}! Confidence: ${(matchData.confidence * 100).toFixed(1)}%`
                     });
                 } else {
                     toast.info(attendanceData.message);
