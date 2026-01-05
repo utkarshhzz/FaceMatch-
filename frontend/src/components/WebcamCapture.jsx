@@ -1,8 +1,7 @@
 import { useState,useRef,useCallback } from "react";
 import Webcam from "react-webcam";
-import {Camera,X,RefreshCw,CheckCircle2,AlertCircle} from 'lucide-react';
+import {Camera,RefreshCw,CheckCircle2,AlertCircle} from 'lucide-react';
 import { Button } from "@/components/ui/button";
-import {Card,CardContent,CardHeader,CardTitle,CardDescription} from "@/components/ui/card";
 
 // webcapture commponent
 
@@ -61,16 +60,7 @@ export default function WebcamCapture({onCapture,
     };
 
     return (
-        <Card>
-        <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-                <Camera className="h-5 w-5"/>
-                {title}
-
-            </CardTitle>
-            <CardDescription> {description}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4"> 
+        <div className="space-y-4">
         {/* camera view */}
         <div className="relative bg-slate-900 rounded-lg overflow-hidden aspect-video">
             {!capturedImage ? (
@@ -174,8 +164,7 @@ export default function WebcamCapture({onCapture,
                 </div>
 
 
-        </CardContent>
-        </Card>
+        </div>
 
     )
 

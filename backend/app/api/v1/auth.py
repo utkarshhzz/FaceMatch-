@@ -39,6 +39,18 @@ async def register_user(user_data: UserCreate):
                     detail="Email already registered"
                 )
             
+            # Check if employee_id already exists
+            result = await db.execute(
+                select(User).where(User.employee_id == user_data.employee_id)
+            )
+            existing_emp = result.scalar_one_or_none()
+            
+            if existing_emp:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Employee ID already registered"
+                )
+            
             # Validate password strength
             is_valid, error_msg = validate_password_strength(user_data.password)
             if not is_valid:
@@ -49,6 +61,7 @@ async def register_user(user_data: UserCreate):
             
             # Create new user
             new_user = User(
+                employee_id=user_data.employee_id,
                 email=user_data.email,
                 hashed_password=hash_password(user_data.password),
                 full_name=user_data.full_name,
@@ -61,7 +74,7 @@ async def register_user(user_data: UserCreate):
             await db.commit()
             await db.refresh(new_user)
             
-            logger.info(f"New user registered: {new_user.email} (ID: {new_user.id})")
+            logger.info(f"New user registered: {new_user.email} (Employee ID: {new_user.employee_id})")
             
             return new_user
             
