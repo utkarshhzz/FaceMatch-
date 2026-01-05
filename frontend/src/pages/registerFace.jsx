@@ -211,9 +211,11 @@ export default function RegisterFace() {
                             {captureMode === 'camera' && (
                                 <WebcamCapture
                                     onCapture={(file) => {
+                                        console.log('Camera captured file:', file);
                                         setSelectedImage(file);
                                         const url = URL.createObjectURL(file);
                                         setPreviewUrl(url);
+                                        console.log('States updated - selectedImage:', file.name, 'previewUrl:', url);
                                     }}
                                     title="Capture Your Face"
                                     description="Position your face in the oval and click capture"

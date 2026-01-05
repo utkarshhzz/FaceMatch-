@@ -98,6 +98,11 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
     LOG_FILE: str = "./logs/facematch.log"
     
+     # Root Admin (from .env for security)
+    ROOT_ADMIN_ID: Optional[str] = None
+    ROOT_ADMIN_EMAIL: Optional[str] = None
+    ROOT_ADMIN_PASSWORD: Optional[str] = None
+    
     
     
     # ==================== Environment ====================
@@ -115,6 +120,8 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=True
     )
+    
+    
 
 
 # Global settings instance

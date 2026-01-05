@@ -16,6 +16,7 @@ class User(Base,TimestampMixin):
     __tablename__="users"
     
     id=Column(Integer,primary_key=True,index=True)
+    employee_id=Column(String(50),unique=True,index=True,nullable=False)  # Unique employee ID
     full_name=Column(String(255),nullable=False)
     email=Column(String(100),unique=True,index=True,nullable=False)
     hashed_password=Column(String(255),nullable=False)
@@ -27,4 +28,4 @@ class User(Base,TimestampMixin):
     faces=relationship("Face",back_populates="user",cascade="all, delete-orphan")
     
     def __repr__(self):
-        return f"<User(id={self.id},email={self.email})>"
+        return f"<User(id={self.id},employee_id={self.employee_id},email={self.email})>"

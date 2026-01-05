@@ -55,7 +55,7 @@ export default function MatchFace() {
         try {
             //crearing form data
             const formdata= new FormData();
-            formdata.append('image',selectedImage);
+            formdata.append('file',selectedImage);
 
             //sending image to backend
             const response = await api.post('/faces/match',formdata, {
