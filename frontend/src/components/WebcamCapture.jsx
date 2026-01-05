@@ -12,6 +12,8 @@ export default function WebcamCapture({onCapture,
     //States
     const [capturedImage,setCapturedImage]=useState(null);
     const [error,setError]=useState(null);
+    const [cameraReady, setCameraReady] = useState(false);
+    const [loading, setLoading] = useState(true);
     
 
     //Refs
@@ -54,9 +56,24 @@ export default function WebcamCapture({onCapture,
         setError(null);
     };
 
+    const handleUserMedia = () => {
+        console.log("Camera ready!");
+        setCameraReady(true);
+        setError(null);
+        setLoading(false);
+    };
+
     const handleUserMediaError= (error) => {
         console.error('Camera error:', error);
-        setError('Camera access denied.please enable camera permissions...');
+        setCameraReady(false);
+        setLoading(false);
+        if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
+            setError('Camera access denied. Please allow camera access in your browser settings and refresh the page.');
+        } else if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
+            setError('No camera found. Please connect a camera device and refresh the page.');
+        } else {
+            setError(`Failed to access camera: ${error.message || error.name}. Please check your camera settings.`);
+        }
     };
 
     return (
@@ -66,19 +83,54 @@ export default function WebcamCapture({onCapture,
             {!capturedImage ? (
                 <>
                 <Webcam
+                key="webcam-component"
                 ref={Webcamref}
                 audio={false}
                 screenshotFormat="image/jpeg"
                 screenshotQuality={0.95}
                 videoConstraints= {{
-                    width:1200,
+                    width:1280,
                     height:720,
                     facingMode:"user",
                 }}
+                onUserMedia={handleUserMedia}
                 onUserMediaError={handleUserMediaError}
                 className="w-full h-full object-cover"
+                style={{ display: error ? 'none' : 'block' }}
                 />
+                
+                {/* Loading Indicator */}
+                {loading && !error && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-white">
+                        <div className="text-center space-y-3">
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
+                            <p className="text-sm">Requesting camera access...</p>
+                        </div>
+                    </div>
+                )}
+                
+                {/* Error Overlay - shown on top of camera if there's an error */}
+                {error && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-gray-900/95 text-white p-6">
+                        <div className="text-center space-y-4 max-w-md">
+                            <AlertCircle className="h-16 w-16 mx-auto text-red-500" />
+                            <div>
+                                <h3 className="text-lg font-semibold mb-2">Camera Access Required</h3>
+                                <p className="text-sm text-gray-300">{error}</p>
+                            </div>
+                            <Button 
+                                onClick={() => window.location.reload()} 
+                                variant="outline"
+                                className="mt-4"
+                            >
+                                <RefreshCw className="h-4 w-4 mr-2" />
+                                Refresh Page
+                            </Button>
+                        </div>
+                    </div>
+                )}
                 {/* face guide overlay */}
+                {!error && cameraReady && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <div className="relative">
                         {/* oval guide */}
@@ -105,18 +157,13 @@ export default function WebcamCapture({onCapture,
                     </div>
 
                 </div>
+                )}
                 </>
             ) : (
                 // captured image preview
                 <img src={capturedImage} alt="Captured" className="w-full h-full object-cover" />
             )}
         </div>
-        {error && (
-            <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-lg p-3 flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 flex-shrink-0"/>
-                <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
-            </div>
-        )}
 
         {/* Success Message */}
                 {capturedImage && (
@@ -132,6 +179,7 @@ export default function WebcamCapture({onCapture,
                 //Captuer button
                 <Button
                 onClick={capture}
+                disabled={!cameraReady || error}
                 className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-gray-700 hover:to-emerald-700">
                     <Camera className="h-4  w-4 mr-2"/>
                     Capture Photo

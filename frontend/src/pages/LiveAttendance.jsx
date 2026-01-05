@@ -11,12 +11,38 @@ export default function LiveAttendance() {
     const [isProcessing, setIsProcessing] = useState(false);
     const [lastMatch, setLastMatch] = useState(null);
     const [isScanning, setIsScanning] = useState(false);
+    const [cameraError, setCameraError] = useState(null);
     const scanIntervalRef = useRef(null);
 
     const videoConstraints = {
         width: 1280,
         height: 720,
         facingMode: "user"
+    };
+
+    const handleUserMediaError = (error) => {
+        console.error("Camera error:", error);
+        if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
+            setCameraError("Camera access denied. Please allow camera access in your browser settings.");
+            toast.error("Camera Access Denied", {
+                description: "Please allow camera access and refresh the page"
+            });
+        } else if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
+            setCameraError("No camera found. Please connect a camera device.");
+            toast.error("No Camera Found");
+        } else {
+            setCameraError("Failed to access camera. Please check your camera settings.");
+            toast.error("Camera Error", {
+                description: error.message || "Unknown error"
+            });
+        }
+    };
+
+    const handleUserMedia = () => {
+        setCameraError(null);
+        toast.success("Camera ready", {
+            description: "You can now start scanning for attendance"
+        });
     };
 
     // Auto-scan every 3 seconds when scanning is enabled
@@ -55,24 +81,31 @@ export default function LiveAttendance() {
             const blob = await response.blob();
             const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
 
+            console.log("Captured file:", file.name, file.size, file.type);
+
             // Match face
             const formData = new FormData();
             formData.append("file", file);
 
+            console.log("Sending match request...");
             const matchResponse = await api.post("/faces/match-camera", formData, {
                 headers: { "Content-Type": "multipart/form-data" }
             });
 
+            console.log("Match response:", matchResponse.data);
             const matchData = matchResponse.data;
 
             if (matchData.matched && matchData.best_match) {
                 const match = matchData.best_match;
+                
+                console.log("Face matched! Marking attendance for user:", match.user_id);
                 
                 // Mark attendance
                 const attendanceResponse = await api.post("/faces/attendance/mark", {
                     user_id: match.user_id
                 });
 
+                console.log("Attendance response:", attendanceResponse.data);
                 const attendanceData = attendanceResponse.data;
 
                 setLastMatch({
@@ -91,17 +124,34 @@ export default function LiveAttendance() {
                     toast.info(attendanceData.message);
                 }
             } else {
+                console.log("No face matched. Response:", matchData);
                 toast.warning("No face matched", {
                     description: "Please position your face clearly in the camera"
                 });
                 setLastMatch(null);
             }
         } catch (error) {
-            console.error("Error:", error);
-            toast.error("Failed to process face", {
-                description: error.response?.data?.detail || "Please try again"
-            });
-            setLastMatch(null);
+            console.error("Error details:", error);
+            console.error("Error response:", error.response?.data);
+            console.error("Error status:", error.response?.status);
+            
+            const errorDetail = error.response?.data?.detail || error.message;
+            
+            // Handle specific error cases
+            if (errorDetail?.includes("No face detected")) {
+                // Only show toast for manual captures, not auto-scan
+                if (!isScanning) {
+                    toast.warning("No face detected", {
+                        description: "Make sure your face is visible, centered, and well-lit"
+                    });
+                }
+                setLastMatch(null);
+            } else {
+                toast.error("Failed to process face", {
+                    description: errorDetail || "Please try again"
+                });
+                setLastMatch(null);
+            }
         } finally {
             setIsProcessing(false);
         }
@@ -146,26 +196,57 @@ export default function LiveAttendance() {
                         <CardContent className="space-y-4">
                             {/* Webcam */}
                             <div className="relative rounded-lg overflow-hidden bg-black aspect-video">
-                                <Webcam
-                                    ref={webcamRef}
-                                    audio={false}
-                                    screenshotFormat="image/jpeg"
-                                    videoConstraints={videoConstraints}
-                                    className="w-full h-full object-cover"
-                                />
+                                {cameraError ? (
+                                    <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-white p-6">
+                                        <div className="text-center space-y-4">
+                                            <AlertCircle className="h-16 w-16 mx-auto text-red-500" />
+                                            <div>
+                                                <h3 className="text-lg font-semibold mb-2">Camera Access Required</h3>
+                                                <p className="text-sm text-gray-300 max-w-md mx-auto">{cameraError}</p>
+                                            </div>
+                                            <div className="space-y-2 text-xs text-left bg-gray-800 p-4 rounded-lg max-w-md mx-auto">
+                                                <p className="font-semibold text-white">To enable camera:</p>
+                                                <ol className="list-decimal list-inside space-y-1 text-gray-300">
+                                                    <li>Click the camera icon in your browser's address bar</li>
+                                                    <li>Select "Allow" for camera access</li>
+                                                    <li>Refresh this page</li>
+                                                </ol>
+                                            </div>
+                                            <Button 
+                                                onClick={() => window.location.reload()} 
+                                                variant="outline"
+                                                className="mt-4"
+                                            >
+                                                Refresh Page
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <Webcam
+                                        ref={webcamRef}
+                                        audio={false}
+                                        screenshotFormat="image/jpeg"
+                                        videoConstraints={videoConstraints}
+                                        className="w-full h-full object-cover"
+                                        onUserMedia={handleUserMedia}
+                                        onUserMediaError={handleUserMediaError}
+                                    />
+                                )}
                                 
                                 {/* Face Guide Overlay */}
-                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                    <div className="w-64 h-80 border-4 border-blue-500/50 rounded-full shadow-lg shadow-blue-500/50">
-                                        <div className="absolute -top-2 -left-2 w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-lg"></div>
-                                        <div className="absolute -top-2 -right-2 w-8 h-8 border-t-4 border-r-4 border-blue-500 rounded-tr-lg"></div>
-                                        <div className="absolute -bottom-2 -left-2 w-8 h-8 border-b-4 border-l-4 border-blue-500 rounded-bl-lg"></div>
-                                        <div className="absolute -bottom-2 -right-2 w-8 h-8 border-b-4 border-r-4 border-blue-500 rounded-br-lg"></div>
+                                {!cameraError && (
+                                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                        <div className="w-64 h-80 border-4 border-blue-500/50 rounded-full shadow-lg shadow-blue-500/50">
+                                            <div className="absolute -top-2 -left-2 w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-lg"></div>
+                                            <div className="absolute -top-2 -right-2 w-8 h-8 border-t-4 border-r-4 border-blue-500 rounded-tr-lg"></div>
+                                            <div className="absolute -bottom-2 -left-2 w-8 h-8 border-b-4 border-l-4 border-blue-500 rounded-bl-lg"></div>
+                                            <div className="absolute -bottom-2 -right-2 w-8 h-8 border-b-4 border-r-4 border-blue-500 rounded-br-lg"></div>
+                                        </div>
                                     </div>
-                                </div>
+                                )}
 
                                 {/* Scanning Indicator */}
-                                {isScanning && (
+                                {isScanning && !cameraError && (
                                     <div className="absolute top-4 right-4 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2 animate-pulse">
                                         <div className="w-2 h-2 bg-white rounded-full"></div>
                                         Scanning...
@@ -189,6 +270,7 @@ export default function LiveAttendance() {
                                     onClick={toggleScanning}
                                     className="flex-1"
                                     variant={isScanning ? "destructive" : "default"}
+                                    disabled={!!cameraError}
                                 >
                                     {isScanning ? (
                                         <>
@@ -205,7 +287,7 @@ export default function LiveAttendance() {
                                 
                                 <Button
                                     onClick={captureAndMatch}
-                                    disabled={isProcessing || isScanning}
+                                    disabled={isProcessing || isScanning || !!cameraError}
                                     variant="outline"
                                 >
                                     <UserCheck className="h-4 w-4 mr-2" />
@@ -286,6 +368,40 @@ export default function LiveAttendance() {
                         </CardContent>
                     </Card>
                 </div>
+
+                {/* Tips Card */}
+                <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
+                    <CardHeader>
+                        <CardTitle className="text-blue-900 dark:text-blue-100 flex items-center gap-2">
+                            <AlertCircle className="h-5 w-5" />
+                            Tips for Best Results
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <ul className="space-y-2 text-sm text-blue-800 dark:text-blue-200">
+                            <li className="flex items-start gap-2">
+                                <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                                <span>Position your face within the oval guide</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                                <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                                <span>Ensure good lighting on your face</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                                <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                                <span>Look directly at the camera</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                                <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                                <span>Stay still when scanning</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                                <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                                <span>Make sure your full face is visible (no masks or hats)</span>
+                            </li>
+                        </ul>
+                    </CardContent>
+                </Card>
             </div>
         </div>
     );
