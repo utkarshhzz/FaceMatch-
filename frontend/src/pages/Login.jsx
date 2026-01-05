@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from "../context/AuthContext";
-import { Lock, Mail, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Lock, Mail, Eye, EyeOff, Loader2, IdCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { ModeToggle } from "@/components/mode-toggle";
 
 export default function Login() {
-    const [email, setEmail] = useState('');
+    const [identifier, setIdentifier] = useState(''); // Can be email or employee_id
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -21,7 +21,13 @@ export default function Login() {
         setLoading(true);
 
         try {
-            const success = await login(email, password);
+            // Determine if identifier is email or employee_id
+            const isEmail = identifier.includes('@');
+            const loginData = isEmail 
+                ? { email: identifier, password }
+                : { employee_id: identifier, password };
+                
+            const success = await login(loginData);
             
             if (success) {
                 // Small delay to ensure user state is loaded
@@ -72,19 +78,19 @@ export default function Login() {
                 <form onSubmit={handleSubmit}>
                     <CardContent className="space-y-4">
                         
-                        {/* Email Field */}
+                        {/* Email or Employee ID Field */}
                         <div className="space-y-2">
-                            <Label htmlFor="email" className="text-sm font-medium">
-                                Email Address
+                            <Label htmlFor="identifier" className="text-sm font-medium">
+                                Employee ID or Email
                             </Label>
                             <div className="relative">
-                                <Mail className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+                                <IdCard className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
                                 <Input
-                                    id="email"
-                                    type="email"
-                                    placeholder="you@example.com"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
+                                    id="identifier"
+                                    type="text"
+                                    placeholder="Employee ID or email"
+                                    value={identifier}
+                                    onChange={(e) => setIdentifier(e.target.value)}
                                     className="pl-10"
                                     required
                                 />

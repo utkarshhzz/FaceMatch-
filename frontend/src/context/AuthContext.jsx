@@ -32,9 +32,9 @@ export const AuthProvider=({children})=> {
     };
 
     //login function
-    const login=async (email,password) => {
+    const login=async (loginData) => {
         try {
-            const response= await authAPI.login({email,password});
+            const response= await authAPI.login(loginData);
             localStorage.setItem('token',response.data.access_token);
             await loadUser();
             toast.success('Login Successful',{
