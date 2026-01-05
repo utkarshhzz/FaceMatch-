@@ -326,6 +326,7 @@ async def match_face_from_camera(
     This endpoint accepts image captured from webcam and matches against database.
     No authentication required for quick face matching.
     """
+    temp_path = None
     
     try:
         logger.info(f"Received camera capture: {file.filename}, content_type: {file.content_type}")
@@ -356,15 +357,6 @@ async def match_face_from_camera(
             )
         
         logger.info(f"Face detected: {face_info}")
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error in face detection: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Face detection error: {str(e)}"
-        )
         
         # Extract embedding
         logger.info("Extracting face embedding...")
@@ -413,12 +405,30 @@ async def match_face_from_camera(
             
             logger.info(f"Camera match: Found {len(matches)} matches")
             
-            return FaceMatchResponse(
-                matched=len(matches) > 0,
-                best_match=matches[0] if matches else None,
-                all_matches=matches,
-                threshold=0.6
-            )
+            if len(matches) > 0:
+                best = matches[0]
+                # Get employee_id from User
+                user_result = await db.execute(
+                    select(User).where(User.id == best.user_id)
+                )
+                user = user_result.scalar_one_or_none()
+                
+                return FaceMatchResponse(
+                    match_found=True,
+                    employee_id=user.employee_id if user else None,
+                    full_name=best.user_name,
+                    confidence=best.similarity,
+                    message=f"Match found with {(best.similarity * 100):.1f}% confidence"
+                )
+            else:
+                return FaceMatchResponse(
+                    match_found=False,
+                    employee_id=None,
+                    full_name=None,
+                    confidence=None,
+                    message="No matching face found in database"
+                )
+    
     
     except HTTPException:
         raise
@@ -430,7 +440,7 @@ async def match_face_from_camera(
         )
     finally:
         # Clean up temp file
-        if os.path.exists(temp_path):
+        if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
             logger.info(f"Cleaned up temp file: {temp_path}")
 
