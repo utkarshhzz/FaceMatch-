@@ -93,7 +93,8 @@ async def register_user(user_data: UserCreate):
 @router.post("/login", response_model=Token)
 async def login(login_data: UserLogin):
     """
-    Login with email and password.
+    Login with employee_id OR email and password.
+    Employees can use their employee_id, admins can use email.
     
     Simple version: Direct database access, no Depends!
     """
@@ -101,26 +102,41 @@ async def login(login_data: UserLogin):
     # Create database session directly
     async with AsyncSessionLocal() as db:
         
-        # Find user by email
-        result = await db.execute(
-            select(User).where(User.email == login_data.email)
-        )
-        user = result.scalar_one_or_none()
+        # Validate that at least one identifier is provided
+        if not login_data.employee_id and not login_data.email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Either employee_id or email must be provided"
+            )
+        
+        # Find user by employee_id or email
+        if login_data.employee_id:
+            result = await db.execute(
+                select(User).where(User.employee_id == login_data.employee_id)
+            )
+            user = result.scalar_one_or_none()
+            identifier = f"employee_id: {login_data.employee_id}"
+        else:
+            result = await db.execute(
+                select(User).where(User.email == login_data.email)
+            )
+            user = result.scalar_one_or_none()
+            identifier = f"email: {login_data.email}"
         
         # Check if user exists
         if not user:
-            logger.warning(f"Login attempt with non-existent email: {login_data.email}")
+            logger.warning(f"Login attempt with non-existent {identifier}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect email or password"
+                detail="Incorrect credentials"
             )
         
         # Verify password
         if not verify_password(login_data.password, user.hashed_password):
-            logger.warning(f"Failed login attempt for user: {user.email}")
+            logger.warning(f"Failed login attempt for {identifier}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect email or password"
+                detail="Incorrect credentials"
             )
         
         # Check if user is active
@@ -135,7 +151,7 @@ async def login(login_data: UserLogin):
             data={"sub": user.email, "user_id": user.id}
         )
         
-        logger.info(f"User logged in: {user.email}")
+        logger.info(f"User logged in: {user.email} (Employee ID: {user.employee_id})")
         
         return {
             "access_token": access_token,

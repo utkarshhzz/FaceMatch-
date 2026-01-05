@@ -26,6 +26,7 @@ class User(Base,TimestampMixin):
     
     #Relationships
     faces=relationship("Face",back_populates="user",cascade="all, delete-orphan")
+    attendances=relationship("Attendance",back_populates="user",cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<User(id={self.id},employee_id={self.employee_id},email={self.email})>"

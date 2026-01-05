@@ -30,10 +30,11 @@ class FaceMatchResult(BaseModel):
     
 class FaceMatchResponse(BaseModel):
     """Response for face matching"""
-    matched:bool
-    best_match:Optional[FaceMatchResult]
-    all_matches:List[FaceMatchResult]
-    threshold:float=0.6
+    match_found:bool
+    employee_id:Optional[str]=None
+    full_name:Optional[str]=None
+    confidence:Optional[float]=None
+    message: str
     
     
 class FaceDetailResponse(BaseModel):
@@ -49,6 +50,14 @@ class FaceDetailResponse(BaseModel):
     is_primary: bool
     created_at: datetime
     updated_at: datetime
+    
+    
+class FaceRegisterResponse(BaseModel):
+    success: bool
+    message: str
+    employee_id: str
+    face_id: int
+    image_url: str
     
     class Config:
         from_attributes = True

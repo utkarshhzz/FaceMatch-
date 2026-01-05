@@ -16,8 +16,17 @@ class UserCreate(UserBase):
  
  #Schema for user login
 class UserLogin(BaseModel):
-    email:EmailStr
-    password:str
+    email: Optional[EmailStr] = None
+    employee_id: Optional[str] = None
+    password: str
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "employee_id": "245816470",
+                "password": "yourpassword"
+            }
+        }
     
     
 #Schema for user response

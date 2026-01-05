@@ -1,6 +1,6 @@
 ### Fae recongnition endpoints
 
-from fastapi import APIRouter,UploadFile,File,Header,HTTPException,status,Form
+from fastapi import Depends,APIRouter,UploadFile,File,Header,HTTPException,status,Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import os
@@ -11,10 +11,11 @@ from app.schemas.face import (
     FaceDetailResponse,
     FaceUploadResponse,
     FaceMatchResponse,
-    FaceMatchResult
+    FaceMatchResult,
+    FaceRegisterResponse
 )
 
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.face import Face
 from app.models.encoding import Encoding
 from app.core.security import decode_access_token
@@ -57,8 +58,10 @@ async def get_current_user_from_token(authorization:str) -> User:
             )
         return user
     
-@router.post("/register",response_model=FaceUploadResponse)
+@router.post("/register",response_model=FaceRegisterResponse)
 async def register_face(
+    employee_id:str=Form(...),
+    full_name: str= Form(...),
     file:UploadFile=File(...),
     authorization:str=Header(None)
 ):
@@ -71,6 +74,14 @@ async def register_face(
     
     #Get current user
     user=await get_current_user_from_token(authorization)
+    
+    # Check if user is admin
+    if user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can register employee faces"
+        )
+    
     #validation
     if file.content_type and not file.content_type.startswith("image/"):
         raise HTTPException(
@@ -350,3 +361,160 @@ async def match_face_from_camera(
         # Clean up temp file
         if os.path.exists(temp_path):
             os.remove(temp_path)
+
+
+# ============================================
+# ATTENDANCE ENDPOINTS
+# ============================================
+
+from app.models.attendance import Attendance, AttendanceStatus
+from app.schemas.attendance import (
+    AttendanceMarkRequest,
+    AttendanceResponse,
+    AttendanceMarkResponse,
+    AttendanceAnalytics
+)
+from datetime import date, timedelta
+from sqlalchemy import func, and_, extract
+
+
+@router.post("/attendance/mark", response_model=AttendanceMarkResponse)
+async def mark_attendance(
+    request: AttendanceMarkRequest
+):
+    """
+    Mark attendance for an employee after successful face match.
+    This endpoint is called from the live camera feed after a face is matched.
+    """
+    async with AsyncSessionLocal() as db:
+        # Check if user exists
+        user_result = await db.execute(
+            select(User).where(User.id == request.user_id)
+        )
+        user = user_result.scalar_one_or_none()
+        
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Employee not found"
+            )
+        
+        # Check if attendance already marked for today
+        today = date.today()
+        existing_result = await db.execute(
+            select(Attendance).where(
+                and_(
+                    Attendance.user_id == request.user_id,
+                    Attendance.date == today
+                )
+            )
+        )
+        existing_attendance = existing_result.scalar_one_or_none()
+        
+        if existing_attendance:
+            return AttendanceMarkResponse(
+                success=False,
+                message=f"Attendance already marked for {user.full_name} today at {existing_attendance.time_in.strftime('%I:%M %p')}",
+                attendance=AttendanceResponse.model_validate(existing_attendance)
+            )
+        
+        # Create new attendance record
+        from datetime import datetime
+        new_attendance = Attendance(
+            user_id=request.user_id,
+            date=today,
+            time_in=datetime.now(),
+            status=AttendanceStatus.PRESENT
+        )
+        
+        db.add(new_attendance)
+        await db.commit()
+        await db.refresh(new_attendance)
+        
+        logger.info(f"Attendance marked for user {user.full_name} (ID: {user.employee_id})")
+        
+        return AttendanceMarkResponse(
+            success=True,
+            message=f"Attendance marked successfully for {user.full_name}",
+            attendance=AttendanceResponse.model_validate(new_attendance)
+        )
+
+
+@router.get("/attendance/my-records", response_model=list[AttendanceResponse])
+async def get_my_attendance_records(
+    authorization: str = Header(None),
+    limit: int = 30
+):
+    """
+    Get attendance records for the logged-in employee.
+    Returns the last 'limit' records (default 30 days).
+    """
+    user = await get_current_user_from_token(authorization)
+    
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Attendance)
+            .where(Attendance.user_id == user.id)
+            .order_by(Attendance.date.desc())
+            .limit(limit)
+        )
+        attendances = result.scalars().all()
+        
+        return [AttendanceResponse.model_validate(att) for att in attendances]
+
+
+@router.get("/attendance/analytics", response_model=AttendanceAnalytics)
+async def get_attendance_analytics(
+    authorization: str = Header(None)
+):
+    """
+    Get attendance analytics for the logged-in employee.
+    Includes total days, present/absent counts, and attendance percentage.
+    """
+    user = await get_current_user_from_token(authorization)
+    
+    async with AsyncSessionLocal() as db:
+        # Get all attendance records
+        result = await db.execute(
+            select(Attendance).where(Attendance.user_id == user.id)
+        )
+        all_attendances = result.scalars().all()
+        
+        # Calculate statistics
+        total_days = len(all_attendances)
+        present_days = sum(1 for att in all_attendances if att.status == AttendanceStatus.PRESENT)
+        absent_days = sum(1 for att in all_attendances if att.status == AttendanceStatus.ABSENT)
+        half_days = sum(1 for att in all_attendances if att.status == AttendanceStatus.HALF_DAY)
+        leave_days = sum(1 for att in all_attendances if att.status == AttendanceStatus.LEAVE)
+        
+        # Calculate attendance percentage
+        attendance_percentage = (present_days / total_days * 100) if total_days > 0 else 0.0
+        
+        # Current month statistics
+        today = date.today()
+        current_month_result = await db.execute(
+            select(Attendance).where(
+                and_(
+                    Attendance.user_id == user.id,
+                    extract('year', Attendance.date) == today.year,
+                    extract('month', Attendance.date) == today.month
+                )
+            )
+        )
+        current_month_attendances = current_month_result.scalars().all()
+        current_month_total = len(current_month_attendances)
+        current_month_present = sum(
+            1 for att in current_month_attendances 
+            if att.status == AttendanceStatus.PRESENT
+        )
+        
+        return AttendanceAnalytics(
+            total_days=total_days,
+            present_days=present_days,
+            absent_days=absent_days,
+            half_days=half_days,
+            leave_days=leave_days,
+            attendance_percentage=round(attendance_percentage, 2),
+            current_month_present=current_month_present,
+            current_month_total=current_month_total
+        )
