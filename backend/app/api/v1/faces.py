@@ -1,5 +1,6 @@
 ### Fae recongnition endpoints
 
+from tkinter.font import Font
 from fastapi import Depends,APIRouter,UploadFile,File,Header,HTTPException,status,Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -204,74 +205,6 @@ async def register_face(
         )
     
 @router.post("/match",response_model=FaceMatchResponse)
-async def match_face(file: UploadFile=File(...)):
-    """Matching uplaoded face against daatbase"""
-    #saving temp file
-    temp_dir="./data/temp"
-    os.makedirs(temp_dir,exist_ok=True)
-    
-    temp_filename=f"{uuid.uuid4()}.{file.filename.split('.')[-1]}"
-    temp_path=os.path.join(temp_dir,temp_filename)
-    with open(temp_path,'wb') as f:
-        content=await file.read()
-        f.write(content)
-        
-    try:
-        #detect face
-        face_info=face_detector.detect_face(temp_path)
-        if not face_info:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No face detected in the image"
-            )
-        #Extract embedding
-        query_embedding=face_encoder.extract_embedding(temp_path)
-        
-        if query_embedding is None:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to extract face embedding"
-            )
-            
-        async with AsyncSessionLocal() as db:
-            result= await db.execute(select(Encoding,Face,User)
-                                     .join(Face,Encoding.face_id==Face.id)
-                                     .join(User,Face.user_id==User.id))
-            
-            all_encodings=result.all()
-            
-            matches=[]
-            for encoding,face,user in all_encodings:
-                #deserialise embeddings
-                db_embedding=face_encoder.deserialize_embedding(encoding.embedding)
-                
-                #Calculate similarity
-                similarity=face_encoder.cosine_similarity(query_embedding,db_embedding)
-                
-                if similarity >=0.6:
-                    matches.append(FaceMatchResult(
-                        user_id=user.id,
-                        user_email=user.email,
-                        user_name=user.full_name,
-                        face_id=face.id,
-                        similarity=similarity,
-                        quality_score=face.quality_score
-                        
-                    ))
-                #Soritng
-                matches.sort(key=lambda x:x.similarity,reverse=True)
-                
-                return FaceMatchResponse(
-                    matched=len(matches) >0,
-                    best_match=matches[0] if matches else None,
-                    all_matches=matches,
-                    threshold=0.6
-                )
-    finally:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
-            
-            
             
 @router.get("/my-faces",response_model=list[FaceDetailResponse])
 async def get_my_faces(
@@ -600,3 +533,115 @@ async def get_attendance_analytics(
             current_month_present=current_month_present,
             current_month_total=current_month_total
         )
+        
+        
+        
+from fastapi.responses import FileResponse
+from openpyxl import Workbook
+from datetime import datetime
+import os
+
+@router.get("/attendance/report")
+async def export_attendance(
+    start_date:str=None,
+    end_date:str=None,
+    authorization:str=Header(None)
+):
+    
+    #verifuing admin
+    current_user=await get_current_user_from_token(authorization)
+    
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=403,
+            detail="only administrators can export attendance reports"
+        )
+    
+    async with AsyncSessionLocal() as db:
+        try:
+            query=select(Attendance,User).join(
+                User,Attendance.user_id==User.id
+            ).order_by(Attendance.date.desc())
+            
+            if start_date:
+                query=query.filter(Attendance.date>=start_date)
+            if end_date:
+                query=query.filter(Attendance.date<=end_date)
+                
+            #execuring query
+            result=await db.execute(query)
+            records=result.all()
+            
+            #Creating Excel workbook
+            
+            wb=Workbook()
+            ws=wb.active
+            ws.title="Attendance Report"
+            
+            headers= [
+                "Date",
+                "employee_id",
+                "Employee Name",
+                "Time in",
+                "Time out",
+                "Status",
+                "Day of Week"
+            ]
+            ws.append(headers)
+            
+            #making headers bold
+            for cell in ws[1]:
+                cell.font=Font(bold=True)
+                
+            #addng data
+            for attendance,user in records:
+                ws.append([
+                    attendance.data.strftime("%Y-%m-%d"),
+                    user.employee_id,
+                    user.full_name,
+                    attendance.time_in.strftime("%I:%M %p") if attendance.time_in else "",
+                    attendance.time_out.strftime("%I:%M %p") if attendance.time_out else "",
+                    attendance.status,
+                    attendance.date.strftime("%A")
+                ])
+                
+            for column in ws.columns:
+                max_length=0
+                column=[cell for cell in column]
+                for cell in column:
+                    try:
+                        if len(str(cell.value))> max_length:
+                            max_length=len(cell.value)
+                        
+                    except:
+                        pass
+                    
+                    adjusted_width = (max_length + 2)
+                    ws.column_dimensions[column[0].column_letter].width = adjusted_width
+                    
+            #Saving the file
+            temp_dir="./data/temp"
+            os.makedirs(temp_dir,exist_ok=True)
+            
+            filename=f"attendance_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            filepath=os.path.join(temp_dir,filename)
+            
+            wb.save(filepath)
+            
+            logger.info(f"Created Attendance report: {filepath}")
+            
+            #returning the file
+            return FileResponse(
+                path=filepath,
+                filename=filename,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheet.sheet",
+                background=BackgroundTask(lambda: os.remove(filepath))  #cleanup
+            )
+        
+        except Exception as e:
+            logger.error(f"Export failed:{str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to export : {str(e)}"
+            )
+                
