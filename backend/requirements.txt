@@ -56,3 +56,10 @@ pillow
 # These provide better detection with glasses, different angles, lighting
 retina-face>=0.0.1  # RetinaFace - Best accuracy
 mtcnn>=0.1.0  # MTCNN - Good for various angles
+
+
+openpyxl==3.1.2
+pandas==2.1.4
+xlrd==2.0.1
+gunicorn==20.1.0
+celery==5.4.7
