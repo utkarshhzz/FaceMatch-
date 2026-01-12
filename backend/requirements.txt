@@ -45,6 +45,12 @@ aiofiles==23.2.1
 # Utilities
 python-json-logger==2.0.7
 
+# Excel Export
+openpyxl==3.1.2
+
+# Email Notifications
+aiosmtplib==3.0.1
+
 #Face recognition libraries
 
 opencv-python-headless

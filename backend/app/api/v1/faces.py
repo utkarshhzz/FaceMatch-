@@ -1,12 +1,13 @@
 ### Fae recongnition endpoints
 
-from tkinter.font import Font
+from openpyxl.styles import Font
 from fastapi import Depends,APIRouter,UploadFile,File,Header,HTTPException,status,Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import os
 import uuid
 from typing import Optional
+from app.utils.email_service import email_service
 
 from app.schemas.face import (
     FaceDetailResponse,
@@ -203,6 +204,83 @@ async def register_face(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to register face: {str(e)}"
         )
+        
+@router.post("/attendance/mark")
+async def mark_attendance(data:dict):
+    # Mark attendance '
+    user_id=data.get('user_id')
+    async with AsyncSessionLocal() as db:
+        user_result=await db.execute(
+            select(User).where(User.id==user_id)
+        )
+        user=user_result.scalar_one_or_none()
+        
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+            
+        # checking if already marked
+        today=date.today()
+        result=await db.execute(
+            select(Attendance).where(Attendance.user_id==user_id,
+                                     Attendance.date==today)
+        )
+        existing= result.scalar_one_or_none()
+        if existing:
+            return {
+                "success": False,
+                "message": "attendance already marked for today",
+                "time_in": str(existing.time_in)
+                
+            }
+            
+        # Mark attendance 
+        current_time=datetime.now().time()
+        
+        new_attendance=Attendance(
+            user_id=user_id,
+            date=today,
+            time_in=current_time,
+            status=AttendanceStatus.PRESENT
+        )
+        db.add(new_attendance)
+        await db.commit()
+        await db.refresh(new_attendance)
+        
+        logger.info(f"Marked attendance for {user.full_name}")
+        
+        #sending email
+        import asyncio
+        
+        date_str=today.strftime("%A,%B %d,%Y")
+        time_str = current_time.strftime("%I:%M %p")
+        
+        asyncio.create_task(
+            email_service.send_attendance_marked_email(
+                employee_name=user.full_name,
+                employee_email=user.email,
+                time_in=time_str,
+                date=date_str
+            )
+        )
+        
+        asyncio.create_task(
+            email_service.send_attendance_notification_to_admin(
+                employee_name=user.full_name,
+                employee_id=user.employee_id,
+                time_in=time_str,
+                date=date_str
+            )
+        )
+        
+        return {
+            "success": True,
+            "message": "Attendance marked successfully",
+            "time_in": time_str,
+            "date": date_str
+        }
     
 @router.post("/match",response_model=FaceMatchResponse)
             
@@ -537,6 +615,7 @@ async def get_attendance_analytics(
         
         
 from fastapi.responses import FileResponse
+from fastapi import BackgroundTasks
 from openpyxl import Workbook
 from datetime import datetime
 import os
@@ -630,12 +709,17 @@ async def export_attendance(
             
             logger.info(f"Created Attendance report: {filepath}")
             
+            def cleanup():
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+            
             #returning the file
+            from starlette.background import BackgroundTask
             return FileResponse(
                 path=filepath,
                 filename=filename,
                 media_type="application/vnd.openxmlformats-officedocument.spreadsheet.sheet",
-                background=BackgroundTask(lambda: os.remove(filepath))  #cleanup
+                background=BackgroundTask(cleanup)  #cleanup
             )
         
         except Exception as e:
