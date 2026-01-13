@@ -9,7 +9,8 @@ import {
     Search, 
     ArrowLeft,
     Download,
-    FileSpreadsheet 
+    FileSpreadsheet,
+    Camera
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -130,10 +131,17 @@ export default function AdminDashboard() {
                         </Button>
                         <Button
                             onClick={() => navigate('/register-face')}
-                            className="bg-gradient-to-r from-indigo-600 to-purple-600"
+                            variant="outline"
                         >
                             <UserPlus className="h-4 w-4 mr-2" />
-                            Register Employee
+                            Single Photo
+                        </Button>
+                        <Button
+                            onClick={() => navigate('/register-multiple-faces')}
+                            className="bg-gradient-to-r from-indigo-600 to-purple-600"
+                        >
+                            <Camera className="h-4 w-4 mr-2" />
+                            Multiple Photos
                         </Button>
                     </div>
                 </div>
