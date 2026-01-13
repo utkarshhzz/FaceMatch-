@@ -3,6 +3,7 @@ import { AuthProvider } from './context/AuthContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import RegisterFace from './pages/RegisterFace';
+import RegisterMultipleFaces from './pages/RegisterMultipleFaces';
 import MatchFace from './pages/MatchFace';
 import LiveAttendance from './pages/LiveAttendance';
 import EmployeeDashboard from './pages/EmployeeDashboard';
@@ -23,7 +24,7 @@ function App() {
             <Route path="/match-face" element={<MatchFace/>} />
             <Route path="/live-attendance" element={<LiveAttendance />} />
             <Route path="/employee-dashboard" element={<EmployeeDashboard />} />
-
+            <Route path="/register-multiple-faces" element={<RegisterMultipleFaces />} />
             <Route path="/" element={<Navigate to="/login" />} />
           </Routes>
         </BrowserRouter>

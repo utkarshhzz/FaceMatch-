@@ -65,6 +65,7 @@ async def register_face(
     employee_id:str=Form(...),
     full_name: str= Form(...),
     file:UploadFile=File(...),
+    photo_number:int=Form(1),
     authorization:str=Header(None)
 ):
     """Upload and register a face image for an employee (Admin only)
@@ -114,6 +115,23 @@ async def register_face(
                 await db.commit()
                 await db.refresh(employee_user)
                 logger.info(f"Created new employee user: {employee_id}")
+                
+        #Checking how many facces already registrered
+        existing_faces_result=await db.execute(
+            select(Face).where(Face.user_id==employee_user.id)
+            
+        )
+        existing_faces=existing_faces_result.scalars().all()
+        
+        if len(existing_faces)>=5:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Maximum of 5 faces already registered for this employee"
+            )
+        
+        #Saving uploaded file
+        file_extension=file.filename.split(".")[-1]
+        filename=f"{employee_id}_photo{photo_number}.{file_extension}"
         
         #creating upload directory for this employee
         upload_dir=f"./data/uploads/{employee_user.id}"
@@ -187,7 +205,7 @@ async def register_face(
             await db.commit()
             logger.info(f"Registered face {new_face.id} for employee {employee_id} ({full_name})")
             
-            # Return proper response format
+            # Return proper response format 
             return FaceRegisterResponse(
                 success=True,
                 message=f"Face registered successfully for {full_name}",
