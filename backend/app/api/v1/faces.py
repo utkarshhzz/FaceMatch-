@@ -26,6 +26,8 @@ from app.core.config import settings
 from app.db.session import AsyncSessionLocal
 from app.utils.face_detector import face_detector
 from app.utils.face_encoder import face_encoder
+from app.utils.redis_cache import redis_cache
+import numpy as np
 
 router=APIRouter(prefix="/faces",tags=["Face Recognition"])
 
@@ -400,72 +402,125 @@ async def match_face_from_camera(
         
         logger.info(f"Embedding extracted, shape: {query_embedding.shape}")
         
-        # Compare with all faces in database
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(
-                select(Encoding, Face, User)
-                .join(Face, Encoding.face_id == Face.id)
-                .join(User, Face.user_id == User.id)
-            )
-            
-            all_encodings = result.all()
-            logger.info(f"Comparing against {len(all_encodings)} faces in database")
-            
+        # Redis caching first
+        cached_embeddings = redis_cache.get_all_embeddings()
+        
+        if cached_embeddings:
+            logger.info(f"✅ Using {len(cached_embeddings)} cached embeddings")
             matches = []
-            for encoding, face, user in all_encodings:
-                # Deserialize embedding
-                db_embedding = face_encoder.deserialize_embedding(encoding.embedding)
-                
-                # Calculate similarity
-                similarity = face_encoder.cosine_similarity(query_embedding, db_embedding)
-                
-                if similarity >= 0.6:  # Threshold
-                    matches.append(FaceMatchResult(
-                        user_id=user.id,
-                        user_email=user.email,
-                        user_name=user.full_name,
-                        face_id=face.id,
-                        similarity=similarity,
-                        quality_score=face.quality_score
-                    ))
             
-            # Sort by similarity
-            matches.sort(key=lambda x: x.similarity, reverse=True)
+            async with AsyncSessionLocal() as db:
+                for employee_id, stored_embedding in cached_embeddings.items():
+                    result = await db.execute(
+                        select(User).where(User.employee_id == employee_id)
+                    )
+                    user = result.scalar_one_or_none()
+                    
+                    if user and user.is_active:
+                        similarity = np.dot(query_embedding, stored_embedding) / (
+                            np.linalg.norm(query_embedding) * np.linalg.norm(stored_embedding)
+                        )
+                        
+                        matches.append({
+                            "user_id": user.id,
+                            "employee_id": user.employee_id,
+                            "full_name": user.full_name,
+                            "similarity": float(similarity)
+                        })
+        else:
+            # Cache miss - query database
+            logger.info("❌ Cache miss - querying database")
             
-            logger.info(f"Camera match: Found {len(matches)} matches")
-            
-            if len(matches) > 0:
-                best = matches[0]
-                # Get employee_id from User
-                user_result = await db.execute(
-                    select(User).where(User.id == best.user_id)
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    select(Encoding, Face, User)
+                    .join(Face, Encoding.face_id == Face.id)
+                    .join(User, Face.user_id == User.id)
                 )
-                user = user_result.scalar_one_or_none()
                 
-                return FaceMatchResponse(
-                    match_found=True,
-                    employee_id=user.employee_id if user else None,
-                    full_name=best.user_name,
-                    confidence=best.similarity,
-                    message=f"Match found with {(best.similarity * 100):.1f}% confidence"
-                )
+                all_encodings = result.all()
+                logger.info(f"Comparing against {len(all_encodings)} faces in database")
+                
+                matches = []
+                cache_data = {}  # For batch caching
+                
+                for encoding, face, user in all_encodings:
+                    # Deserialize embedding
+                    db_embedding = face_encoder.deserialize_embedding(encoding.embedding)
+                    
+                    # Calculate similarity
+                    similarity = face_encoder.cosine_similarity(query_embedding, db_embedding)
+                    
+                    if similarity >= 0.6:  # Threshold
+                        matches.append(FaceMatchResult(
+                            user_id=user.id,
+                            user_email=user.email,
+                            user_name=user.full_name,
+                            face_id=face.id,
+                            similarity=similarity,
+                            quality_score=face.quality_score
+                        ))
+                    
+                    # Collect for caching
+                    cache_data[user.employee_id] = db_embedding
+                
+                # Cache all embeddings
+                redis_cache.set_all_embeddings(cache_data, expire_seconds=3600)
+                logger.info(f"✅ Cached {len(cache_data)} embeddings")
+        
+        # Sort by similarity
+        if matches:
+            matches.sort(key=lambda x: x.similarity if hasattr(x, 'similarity') else x.get('similarity', 0), reverse=True)
+            
+        logger.info(f"Camera match: Found {len(matches)} matches")
+        
+        if len(matches) > 0:
+            best = matches[0]
+            
+            # Handle both dict and FaceMatchResult object
+            if isinstance(best, dict):
+                async with AsyncSessionLocal() as db:
+                    user_result = await db.execute(
+                        select(User).where(User.id == best['user_id'])
+                    )
+                    user = user_result.scalar_one_or_none()
+                    
+                    return FaceMatchResponse(
+                        match_found=True,
+                        employee_id=user.employee_id if user else None,
+                        full_name=best['full_name'],
+                        confidence=best['similarity'],
+                        message=f"Match found with {(best['similarity'] * 100):.1f}% confidence"
+                    )
             else:
-                return FaceMatchResponse(
-                    match_found=False,
-                    employee_id=None,
-                    full_name=None,
-                    confidence=None,
-                    message="No matching face found in database"
-                )
+                # FaceMatchResult object
+                async with AsyncSessionLocal() as db:
+                    user_result = await db.execute(
+                        select(User).where(User.id == best.user_id)
+                    )
+                    user = user_result.scalar_one_or_none()
+                    
+                    return FaceMatchResponse(
+                        match_found=True,
+                        employee_id=user.employee_id if user else None,
+                        full_name=best.user_name,
+                        confidence=best.similarity,
+                        message=f"Match found with {(best.similarity * 100):.1f}% confidence"
+                    )
+        else:
+            return FaceMatchResponse(
+                match_found=False,
+                employee_id=None,
+                full_name=None,
+                confidence=None,
+                message="No matching face found in database"
+            )
     
-    
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Error in match-camera: {str(e)}", exc_info=True)
+        logger.error(f"Error in match_face_from_camera: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Matching error: {str(e)}"
+            detail=str(e)
         )
     finally:
         # Clean up temp file
@@ -474,6 +529,8 @@ async def match_face_from_camera(
             logger.info(f"Cleaned up temp file: {temp_path}")
 
 
+# ============================================
+# ATTENDANCE ENDPOINTS
 # ============================================
 # ATTENDANCE ENDPOINTS
 # ============================================

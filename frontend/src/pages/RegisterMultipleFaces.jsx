@@ -8,6 +8,7 @@ import { Camera, Upload, CheckCircle, XCircle, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/services/api";
 
+
 export default function RegisterMultipleFaces() {
     const navigate = useNavigate();
     const [formData, setFormData] = useState({
