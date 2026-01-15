@@ -1,0 +1,124 @@
+#docker compose configuration 
+
+version: '3.8'
+
+services:
+  database:
+    image: postgres:15-alpine
+    container_name: facematch_db
+
+    environment:
+      POSTGRES_DB: facematch_db
+      POSTGRES_USER: facematch_user
+      POSTGRES_PASSWORD: facematch_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U facematch_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    restart: unless-stopped
+
+
+  redis:
+    image: redis:7-alpine
+    container_name: facematch_redis
+
+    ports:
+      - "6379:6379"
+
+    volumes:
+      - redis_data:/data
+    
+    command: redis-server --appendonly yes
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+
+    container_name: facematch_backend
+
+    environment:
+      POSTGRES_SERVER: database
+      POSTGRES_USER: facematch_user
+      POSTGRES_PASSWORD: facematch_password
+      POSTGRES_DB: facematch_db
+      POSTGRES_PORT: 5432
+
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+
+      SECRET_KEY: "we will change in production -12345678"
+
+      SMTP_HOST: smtp.gmail.com
+      SMTP_PORT: 587
+      SMTP_USER: utkarshbadshah2005@gmail.com
+      SMTP_PASSWORD: "lwnf ygcl qbfk yrrr"
+      SMTP_FROM_EMAIL: utkarshbadshah2005@gmail.com
+      SMTP_FROM_NAME: FaceMatch
+
+    ports:
+      - "8000:8000"
+
+    volumes:
+      - ./backend:/app
+      - backend_data:/app/data
+
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    restart: unless-stopped
+
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+
+    container_name: facematch_frontend
+    
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000/api/v1
+
+    ports:
+      - "5173:5173"
+
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+    depends_on:
+      - backend
+
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  
+  redis_data:
+    driver: local
+  
+  backend_data:
+    driver: local

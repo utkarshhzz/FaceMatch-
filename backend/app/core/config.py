@@ -1,3 +1,4 @@
+import os
 from typing import Optional,List
 from pydantic_settings import BaseSettings,SettingsConfigDict
 from pydantic import Field,validator
@@ -25,11 +26,11 @@ class Settings(BaseSettings):
     
     
     # ==================== Database Configuration ====================
-    POSTGRES_SERVER: str = "localhost"
-    POSTGRES_USER: str = "facematch_user"
-    POSTGRES_PASSWORD: str = "facematch_password"
-    POSTGRES_DB: str = "facematch_db"
-    POSTGRES_PORT: int = 5432
+    POSTGRES_SERVER: str = os.getenv("POSTGRES_SERVER","localhost")
+    POSTGRES_USER: str = os.getenv("POSTGRES_USER","facematch_user")
+    POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD","facematch_password")
+    POSTGRES_DB: str = os.getenv("POSTGRES_DB","facematch_db")
+    POSTGRES_PORT: int = int(os.getenv("POSTGRES_PORT",5432))
     
     @property
     def DATABASE_URL(self) -> str:
@@ -41,10 +42,10 @@ class Settings(BaseSettings):
         
         
     # ==================== Redis Configuration ====================
-    REDIS_HOST: str = "localhost"
-    REDIS_PORT: int = 6379
-    REDIS_DB: int = 0
-    REDIS_PASSWORD: Optional[str] = None
+    REDIS_HOST: str = os.getenv("REDIS_HOST", "localhost")
+    REDIS_PORT: int = int(os.getenv("REDIS_PORT", 6379))
+    REDIS_DB: int = int(os.getenv("REDIS_DB", 0))
+    REDIS_PASSWORD: Optional[str] = os.getenv("REDIS_PASSWORD", None)
     
     @property
     def REDIS_URL(self) -> str:

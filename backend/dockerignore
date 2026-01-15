@@ -1,0 +1,43 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environmet
+venv/
+env/
+ENV/
+
+# Database files (will use Docker volume instead)
+*.db
+*.sqlite
+
+# Environment variables (will be set by docker-compose)
+.env
+.env.local
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Test files
+tests/
+pytest_cache/
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+README.md
+docs/
+
+# Data folders (mounted as volumes
+data/
+uploads/

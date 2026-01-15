@@ -13,7 +13,16 @@ export default defineConfig({
   optimizeDeps: {
     force: true
   },
+  
+  // Server configuration for Docker
   server: {
-    force: true
+    host: '0.0.0.0',  // Accept connections from Docker network
+    port: 5173,        // Port number
+    watch: {
+      usePolling: true,  // Required for Docker file watching
+    },
+    hmr: {
+      host: 'localhost',  // Hot Module Replacement
+    }
   }
 })
