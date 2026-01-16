@@ -121,12 +121,12 @@ class RedisCacheService:
             return False
         
         
-    def get_all_embeddngs(self) -> Dict[str,np.ndarray]:
+    def get_all_embeddings(self) -> Dict[str,np.ndarray]:
         if not self.is_available():
             return {}
         
         try:
-            #finding all embeddinhgs keys
+            #finding all embeddings keys
             pattern="face:embedding:*"
             keys=self.redis_client.keys(pattern)
             
@@ -134,7 +134,7 @@ class RedisCacheService:
                 logger.info("No embeddings found in cache")
                 return {}
             
-            self.redis_client.mget(keys)
+            values = self.redis_client.mget(keys)
             
             embeddings={}
             for key,value in zip(keys,values):

@@ -118,18 +118,17 @@ async def register_face(
                 await db.refresh(employee_user)
                 logger.info(f"Created new employee user: {employee_id}")
                 
-        #Checking how many facces already registrered
-        existing_faces_result=await db.execute(
-            select(Face).where(Face.user_id==employee_user.id)
-            
-        )
-        existing_faces=existing_faces_result.scalars().all()
-        
-        if len(existing_faces)>=5:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Maximum of 5 faces already registered for this employee"
+            #Checking how many faces already registered
+            existing_faces_result=await db.execute(
+                select(Face).where(Face.user_id==employee_user.id)
             )
+            existing_faces=existing_faces_result.scalars().all()
+            
+            if len(existing_faces)>=5:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Maximum of 5 faces already registered for this employee"
+                )
         
         #Saving uploaded file
         file_extension=file.filename.split(".")[-1]
@@ -242,6 +241,7 @@ async def mark_attendance(data:dict):
             )
             
         # checking if already marked
+        from datetime import datetime
         today=date.today()
         result=await db.execute(
             select(Attendance).where(Attendance.user_id==user_id,
@@ -257,12 +257,12 @@ async def mark_attendance(data:dict):
             }
             
         # Mark attendance 
-        current_time=datetime.now().time()
+        current_datetime = datetime.now()
         
         new_attendance=Attendance(
             user_id=user_id,
             date=today,
-            time_in=current_time,
+            time_in=current_datetime,
             status=AttendanceStatus.PRESENT
         )
         db.add(new_attendance)
@@ -275,7 +275,7 @@ async def mark_attendance(data:dict):
         import asyncio
         
         date_str=today.strftime("%A,%B %d,%Y")
-        time_str = current_time.strftime("%I:%M %p")
+        time_str = current_datetime.strftime("%I:%M %p")
         
         asyncio.create_task(
             email_service.send_attendance_marked_email(
