@@ -4,6 +4,7 @@ uvicorn[standard]==0.27.0
 python-multipart==0.0.6
 pydantic==2.5.3
 pydantic-settings==2.1.0
+email-validator==2.1.0
 
 # Database
 sqlalchemy==2.0.25
@@ -19,24 +20,6 @@ bcrypt==4.1.2
 
 # Redis
 redis==5.0.1
-hiredis==2.3.2
-
-# Machine Learning Core
-torch==2.1.2
-torchvision==0.16.2
-onnxruntime==1.16.3
-numpy==1.24.3
-opencv-python==4.9.0.80
-scikit-learn==1.4.0
-scipy==1.11.4
-
-# Face Recognition Models
-insightface==0.7.3
-onnx==1.15.0
-facenet-pytorch==2.5.3
-
-# Vector Search
-faiss-cpu==1.7.4
 
 # HTTP Client
 httpx==0.26.0
@@ -51,21 +34,11 @@ openpyxl==3.1.2
 # Email Notifications
 aiosmtplib==3.0.1
 
-#Face recognition libraries
+# Basic ML (lightweight)
+numpy==1.24.3
+opencv-python-headless==4.9.0.80
+pillow==10.2.0
 
-opencv-python-headless
-deepface
-tf-keras
-pillow
-
-# Additional face detection models for DeepFace
-# These provide better detection with glasses, different angles, lighting
-retina-face>=0.0.1  # RetinaFace - Best accuracy
-mtcnn>=0.1.0  # MTCNN - Good for various angles
-
-
-openpyxl==3.1.2
-pandas==2.1.4
-xlrd==2.0.1
-gunicorn==20.1.0
-celery==5.4.0
+# Face recognition (compatible versions)
+tensorflow==2.15.0
+deepface==0.0.79

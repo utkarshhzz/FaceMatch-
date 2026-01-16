@@ -1,7 +1,5 @@
 #docker compose configuration 
 
-version: '3.8'
-
 services:
   database:
     image: postgres:15-alpine
@@ -20,7 +18,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U facematch_user"]
+      test: ["CMD-SHELL", "pg_isready -U facematch_user -d facematch_db"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -74,6 +72,11 @@ services:
       SMTP_PASSWORD: "lwnf ygcl qbfk yrrr"
       SMTP_FROM_EMAIL: utkarshbadshah2005@gmail.com
       SMTP_FROM_NAME: FaceMatch
+      ADMIN_EMAIL: unofficialutkarsh.06@gmail.com
+
+      ROOT_ADMIN_ID: "245816470"
+      ROOT_ADMIN_EMAIL: unofficialutkarsh.06@gmail.com
+      ROOT_ADMIN_PASSWORD: "Admin@123"
 
     ports:
       - "8000:8000"

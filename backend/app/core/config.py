@@ -99,6 +99,15 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
     LOG_FILE: str = "./logs/facematch.log"
     
+    # ==================== Email Configuration ====================
+    SMTP_HOST: str = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", 587))
+    SMTP_USER: str = os.getenv("SMTP_USER", "")
+    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
+    SMTP_FROM_EMAIL: str = os.getenv("SMTP_FROM_EMAIL", "")
+    SMTP_FROM_NAME: str = os.getenv("SMTP_FROM_NAME", "FaceMatch")
+    ADMIN_EMAIL: str = os.getenv("ADMIN_EMAIL", "")
+    
      # Root Admin (from .env for security)
     ROOT_ADMIN_ID: Optional[str] = None
     ROOT_ADMIN_EMAIL: Optional[str] = None
