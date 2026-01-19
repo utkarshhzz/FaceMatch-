@@ -124,6 +124,31 @@ export default function Dashboard() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    {/* Admin Dashboard Card - Only for Admins */}
+                    {user?.role === 'admin' && (
+                        <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-green-500">
+                            <CardHeader>
+                                <div className="flex items-center gap-3">
+                                    <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center">
+                                        <Users className="h-6 w-6 text-white"></Users>
+                                    </div>
+                                    <div>
+                                        <CardTitle>Admin Dashboard</CardTitle>
+                                        <CardDescription>Manage all employees and attendance</CardDescription>
+                                    </div>
+                                </div>
+                            </CardHeader>
+                            <CardContent>
+                                <Button 
+                                    className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700" 
+                                    onClick={() => navigate('/admin-dashboard')}
+                                >
+                                    Open Admin Panel
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    )}
+
                     <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-indigo-500">
                         <CardHeader>
                             <div className="flex items-center gap-3">

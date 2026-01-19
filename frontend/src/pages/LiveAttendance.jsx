@@ -98,13 +98,9 @@ export default function LiveAttendance() {
             if (matchData.match_found) {
                 console.log("Face matched! Marking attendance for employee:", matchData.employee_id);
                 
-                // Find user_id by employee_id
-                const userResponse = await api.get(`/auth/user-by-employee/${matchData.employee_id}`);
-                const userId = userResponse.data.id;
-                
-                // Mark attendance
+                // Mark attendance directly using employee_id
                 const attendanceResponse = await api.post("/faces/attendance/mark", {
-                    user_id: userId
+                    employee_id: matchData.employee_id
                 });
 
                 console.log("Attendance response:", attendanceResponse.data);

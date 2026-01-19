@@ -7,6 +7,7 @@ import RegisterMultipleFaces from './pages/RegisterMultipleFaces';
 import MatchFace from './pages/MatchFace';
 import LiveAttendance from './pages/LiveAttendance';
 import EmployeeDashboard from './pages/EmployeeDashboard';
+import AdminDashboard from './pages/AdminDashboard';
 import { ThemeProvider } from "@/components/theme-provider"
 import './App.css'
 import Dashboard from './pages/dashboard';
@@ -20,6 +21,7 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/admin-dashboard" element={<AdminDashboard />} />
             <Route path="/register-face" element={<RegisterFace />} />
             <Route path="/match-face" element={<MatchFace/>} />
             <Route path="/live-attendance" element={<LiveAttendance />} />

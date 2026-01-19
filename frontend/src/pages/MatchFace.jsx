@@ -68,15 +68,19 @@ export default function MatchFace() {
 
             if(response.data.match_found) {
                 toast.success('Match found!', {
-                    description: `Matched with ${response.data.person_name}`,
+                    description: `Matched with ${response.data.full_name} (${(response.data.confidence * 100).toFixed(1)}%)`,
                 });
             } else {
-                toast.info("No match found.", {
-                    description: "This face is not in the database",
+                toast.info(response.data.message || "No match found.", {
+                    description: "This face is not in the database or confidence too low",
                 });
             }
         } catch (error) {
-            toast.error("An error occurred while matching the face.");
+            console.error("Match error:", error);
+            const errorMsg = error.response?.data?.detail || error.message || "An error occurred";
+            toast.error("Failed to match face", {
+                description: errorMsg
+            });
         } finally {
             setLoading(false);
         }
@@ -282,10 +286,10 @@ export default function MatchFace() {
                                             </div>
                                             <div>
                                                 <h3 className="font-semibold text-lg">
-                                                    {matchResult.person_name}
+                                                    {matchResult.full_name}
                                                 </h3>
                                                 <p className="text-xs text-muted-foreground">
-                                                    Registered Person
+                                                    Employee ID: {matchResult.employee_id}
                                                 </p>
                                             </div>
                                         </div>

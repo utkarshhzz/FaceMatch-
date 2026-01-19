@@ -131,9 +131,18 @@ async def login(login_data: UserLogin):
                 detail="Incorrect credentials"
             )
         
+        # Debug logging
+        logger.debug(f"Login attempt - User found: {user.email}")
+        logger.debug(f"Password received (length): {len(login_data.password)}")
+        logger.debug(f"Password received (repr): {repr(login_data.password)}")
+        logger.debug(f"Hash (first 20): {user.hashed_password[:20]}")
+        
         # Verify password
-        if not verify_password(login_data.password, user.hashed_password):
-            logger.warning(f"Failed login attempt for {identifier}")
+        password_valid = verify_password(login_data.password, user.hashed_password)
+        logger.debug(f"Password verification result: {password_valid}")
+        
+        if not password_valid:
+            logger.warning(f"Failed login attempt for {identifier} - Password mismatch")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect credentials"

@@ -10,7 +10,8 @@ import {
     ArrowLeft,
     Download,
     FileSpreadsheet,
-    Camera
+    Camera,
+    Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -121,13 +122,21 @@ export default function AdminDashboard() {
                             Manage employee registrations and attendance
                         </p>
                     </div>
-                    <div className="flex gap-3">
+                    <div className="flex gap-3 flex-wrap">
                         <Button
                             variant="outline"
                             onClick={() => navigate('/dashboard')}
                         >
                             <ArrowLeft className="h-4 w-4 mr-2" />
                             Back
+                        </Button>
+                        <Button
+                            onClick={() => navigate('/live-attendance')}
+                            variant="outline"
+                            className="border-green-600 text-green-600 hover:bg-green-50 dark:hover:bg-green-950"
+                        >
+                            <Activity className="h-4 w-4 mr-2" />
+                            Live Attendance
                         </Button>
                         <Button
                             onClick={() => navigate('/register-face')}
@@ -138,10 +147,28 @@ export default function AdminDashboard() {
                         </Button>
                         <Button
                             onClick={() => navigate('/register-multiple-faces')}
-                            className="bg-gradient-to-r from-indigo-600 to-purple-600"
+                            className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
                         >
                             <Camera className="h-4 w-4 mr-2" />
                             Multiple Photos
+                        </Button>
+                        <Button
+                            onClick={handleExport}
+                            disabled={isExporting}
+                            variant="outline"
+                            className="border-blue-600 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950"
+                        >
+                            {isExporting ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Exporting...
+                                </>
+                            ) : (
+                                <>
+                                    <FileSpreadsheet className="h-4 w-4 mr-2" />
+                                    Export
+                                </>
+                            )}
                         </Button>
                     </div>
                 </div>

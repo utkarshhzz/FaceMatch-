@@ -226,13 +226,27 @@ async def register_face(
         
 @router.post("/attendance/mark")
 async def mark_attendance(data:dict):
-    # Mark attendance '
-    user_id=data.get('user_id')
+    """Mark attendance using either user_id or employee_id"""
+    user_id = data.get('user_id')
+    employee_id = data.get('employee_id')
+    
     async with AsyncSessionLocal() as db:
-        user_result=await db.execute(
-            select(User).where(User.id==user_id)
-        )
-        user=user_result.scalar_one_or_none()
+        # Find user by user_id or employee_id
+        if employee_id:
+            user_result = await db.execute(
+                select(User).where(User.employee_id == employee_id)
+            )
+        elif user_id:
+            user_result = await db.execute(
+                select(User).where(User.id == user_id)
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Either user_id or employee_id must be provided"
+            )
+        
+        user = user_result.scalar_one_or_none()
         
         if not user:
             raise HTTPException(
@@ -244,7 +258,7 @@ async def mark_attendance(data:dict):
         from datetime import datetime
         today=date.today()
         result=await db.execute(
-            select(Attendance).where(Attendance.user_id==user_id,
+            select(Attendance).where(Attendance.user_id==user.id,
                                      Attendance.date==today)
         )
         existing= result.scalar_one_or_none()
@@ -260,7 +274,7 @@ async def mark_attendance(data:dict):
         current_datetime = datetime.now()
         
         new_attendance=Attendance(
-            user_id=user_id,
+            user_id=user.id,
             date=today,
             time_in=current_datetime,
             status=AttendanceStatus.PRESENT
@@ -302,7 +316,138 @@ async def mark_attendance(data:dict):
             "date": date_str
         }
     
-@router.post("/match",response_model=FaceMatchResponse)
+@router.post("/match", response_model=FaceMatchResponse)
+async def match_face_from_upload(file: UploadFile = File(...)):
+    """
+    Match a face from uploaded image file
+    """
+    logger.info(f"Received file upload: {file.filename}, content_type: {file.content_type}")
+    
+    # Validate file
+    if not file.content_type.startswith('image/'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File must be an image"
+        )
+    
+    # Save temp file
+    temp_id = str(uuid.uuid4())
+    temp_path = f"./data/temp/{temp_id}.jpg"
+    os.makedirs("./data/temp", exist_ok=True)
+    
+    logger.info(f"Saving to temp path: {temp_path}")
+    
+    try:
+        # Save uploaded file
+        contents = await file.read()
+        logger.info(f"Saved {len(contents)} bytes")
+        
+        with open(temp_path, "wb") as f:
+            f.write(contents)
+        
+        # Detect face
+        logger.info("Starting face detection...")
+        face_info = face_detector.detect_face(temp_path)
+        
+        if not face_info:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No face detected in the image"
+            )
+        
+        logger.info(f"Face detected: {face_info}")
+        
+        # Extract embedding
+        logger.info("Extracting face embedding...")
+        embedding = face_encoder.extract_embedding(temp_path)
+        
+        if embedding is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to extract face embedding"
+            )
+        
+        logger.info(f"Embedding extracted, shape: {embedding.shape}")
+        
+        # Get all registered faces from database
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(Encoding, Face, User)
+                .join(Face, Encoding.face_id == Face.id)
+                .join(User, Face.user_id == User.id)
+                .where(User.is_active == True)
+            )
+            
+            db_faces = result.all()
+            logger.info(f"Comparing against {len(db_faces)} faces in database")
+        
+        # Compare with database faces
+        matches = []
+        threshold = 0.40  # 40% threshold for considering candidates
+        
+        for encoding, face, user in db_faces:
+            db_embedding = face_encoder.deserialize_embedding(encoding.embedding)
+            similarity = face_encoder.cosine_similarity(embedding, db_embedding)
+            
+            if similarity >= threshold:
+                logger.info(f"Match candidate: {user.full_name} - {similarity*100:.1f}% confidence")
+                matches.append({
+                    'user_id': user.id,
+                    'employee_id': user.employee_id,
+                    'full_name': user.full_name,
+                    'similarity': similarity
+                })
+        
+        # Sort by similarity
+        if matches:
+            matches.sort(key=lambda x: x.get('similarity', 0), reverse=True)
+            
+        logger.info(f"Found {len(matches)} matches above threshold")
+        
+        # Only return match if confidence is above 50% (good match)
+        if len(matches) > 0 and matches[0]['similarity'] >= 0.50:
+            best = matches[0]
+            
+            return FaceMatchResponse(
+                match_found=True,
+                employee_id=best['employee_id'],
+                full_name=best['full_name'],
+                confidence=best['similarity'],
+                message=f"Match found with {(best['similarity'] * 100):.1f}% confidence"
+            )
+        elif len(matches) > 0:
+            # Low confidence match
+            best = matches[0]
+            logger.warning(f"Low confidence match: {best['full_name']} - {best['similarity']*100:.1f}%")
+            return FaceMatchResponse(
+                match_found=False,
+                employee_id=None,
+                full_name=None,
+                confidence=None,
+                message=f"No confident match found. Best match was {(best['similarity'] * 100):.1f}% (need 50%+)"
+            )
+        else:
+            return FaceMatchResponse(
+                match_found=False,
+                employee_id=None,
+                full_name=None,
+                confidence=None,
+                message="No matching face found in database"
+            )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error processing face match: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error processing face: {str(e)}"
+        )
+    finally:
+        # Cleanup temp file
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+            logger.info(f"Cleaned up temp file: {temp_path}")
             
 @router.get("/my-faces",response_model=list[FaceDetailResponse])
 async def get_my_faces(
@@ -402,111 +547,67 @@ async def match_face_from_camera(
         
         logger.info(f"Embedding extracted, shape: {query_embedding.shape}")
         
-        # Redis caching first
-        cached_embeddings = redis_cache.get_all_embeddings()
-        
-        if cached_embeddings:
-            logger.info(f"✅ Using {len(cached_embeddings)} cached embeddings")
+        # Always query database for accurate matching
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(Encoding, Face, User)
+                .join(Face, Encoding.face_id == Face.id)
+                .join(User, Face.user_id == User.id)
+                .where(User.is_active == True)
+            )
+            
+            all_encodings = result.all()
+            logger.info(f"Comparing against {len(all_encodings)} faces in database")
+            
             matches = []
             
-            async with AsyncSessionLocal() as db:
-                for employee_id, stored_embedding in cached_embeddings.items():
-                    result = await db.execute(
-                        select(User).where(User.employee_id == employee_id)
-                    )
-                    user = result.scalar_one_or_none()
-                    
-                    if user and user.is_active:
-                        similarity = np.dot(query_embedding, stored_embedding) / (
-                            np.linalg.norm(query_embedding) * np.linalg.norm(stored_embedding)
-                        )
-                        
-                        matches.append({
-                            "user_id": user.id,
-                            "employee_id": user.employee_id,
-                            "full_name": user.full_name,
-                            "similarity": float(similarity)
-                        })
-        else:
-            # Cache miss - query database
-            logger.info("❌ Cache miss - querying database")
-            
-            async with AsyncSessionLocal() as db:
-                result = await db.execute(
-                    select(Encoding, Face, User)
-                    .join(Face, Encoding.face_id == Face.id)
-                    .join(User, Face.user_id == User.id)
-                )
+            for encoding, face, user in all_encodings:
+                # Deserialize embedding
+                db_embedding = face_encoder.deserialize_embedding(encoding.embedding)
                 
-                all_encodings = result.all()
-                logger.info(f"Comparing against {len(all_encodings)} faces in database")
+                # Calculate similarity using cosine similarity
+                similarity = face_encoder.cosine_similarity(query_embedding, db_embedding)
                 
-                matches = []
-                cache_data = {}  # For batch caching
-                
-                for encoding, face, user in all_encodings:
-                    # Deserialize embedding
-                    db_embedding = face_encoder.deserialize_embedding(encoding.embedding)
+                # Only consider matches above 40% confidence
+                if similarity >= 0.40:
+                    matches.append({
+                        "user_id": user.id,
+                        "employee_id": user.employee_id,
+                        "full_name": user.full_name,
+                        "similarity": float(similarity),
+                        "quality_score": face.quality_score
+                    })
                     
-                    # Calculate similarity
-                    similarity = face_encoder.cosine_similarity(query_embedding, db_embedding)
-                    
-                    if similarity >= 0.6:  # Threshold
-                        matches.append(FaceMatchResult(
-                            user_id=user.id,
-                            user_email=user.email,
-                            user_name=user.full_name,
-                            face_id=face.id,
-                            similarity=similarity,
-                            quality_score=face.quality_score
-                        ))
-                    
-                    # Collect for caching
-                    cache_data[user.employee_id] = db_embedding
-                
-                # Cache all embeddings
-                redis_cache.set_all_embeddings(cache_data, expire_seconds=3600)
-                logger.info(f"✅ Cached {len(cache_data)} embeddings")
+                    logger.info(f"Match candidate: {user.full_name} - {similarity*100:.1f}% confidence")
         
         # Sort by similarity
         if matches:
-            matches.sort(key=lambda x: x.similarity if hasattr(x, 'similarity') else x.get('similarity', 0), reverse=True)
+            matches.sort(key=lambda x: x.get('similarity', 0), reverse=True)
             
-        logger.info(f"Camera match: Found {len(matches)} matches")
+        logger.info(f"Camera match: Found {len(matches)} matches above threshold")
         
-        if len(matches) > 0:
+        # Only return match if confidence is above 50% (good match)
+        if len(matches) > 0 and matches[0]['similarity'] >= 0.50:
             best = matches[0]
             
-            # Handle both dict and FaceMatchResult object
-            if isinstance(best, dict):
-                async with AsyncSessionLocal() as db:
-                    user_result = await db.execute(
-                        select(User).where(User.id == best['user_id'])
-                    )
-                    user = user_result.scalar_one_or_none()
-                    
-                    return FaceMatchResponse(
-                        match_found=True,
-                        employee_id=user.employee_id if user else None,
-                        full_name=best['full_name'],
-                        confidence=best['similarity'],
-                        message=f"Match found with {(best['similarity'] * 100):.1f}% confidence"
-                    )
-            else:
-                # FaceMatchResult object
-                async with AsyncSessionLocal() as db:
-                    user_result = await db.execute(
-                        select(User).where(User.id == best.user_id)
-                    )
-                    user = user_result.scalar_one_or_none()
-                    
-                    return FaceMatchResponse(
-                        match_found=True,
-                        employee_id=user.employee_id if user else None,
-                        full_name=best.user_name,
-                        confidence=best.similarity,
-                        message=f"Match found with {(best.similarity * 100):.1f}% confidence"
-                    )
+            return FaceMatchResponse(
+                match_found=True,
+                employee_id=best['employee_id'],
+                full_name=best['full_name'],
+                confidence=best['similarity'],
+                message=f"Match found with {(best['similarity'] * 100):.1f}% confidence"
+            )
+        elif len(matches) > 0:
+            # Low confidence match
+            best = matches[0]
+            logger.warning(f"Low confidence match: {best['full_name']} - {best['similarity']*100:.1f}%")
+            return FaceMatchResponse(
+                match_found=False,
+                employee_id=None,
+                full_name=None,
+                confidence=None,
+                message=f"No confident match found. Best match was {(best['similarity'] * 100):.1f}% (need 50%+)"
+            )
         else:
             return FaceMatchResponse(
                 match_found=False,
