@@ -10,7 +10,7 @@ class FaceEncoder:
     """to extract face embedding usin g Arcface model"""
     def __init__(self,model_name:str="ArcFace"):
         self.model_name=model_name
-        logger.info("Initialised FaceEncoder with {model_name} model")
+        logger.info(f"Initialised FaceEncoder with {model_name} model")
         
     def extract_embedding(self,image_path:str)-> Optional[np.ndarray]:
         """

@@ -80,9 +80,8 @@ class RedisCacheService:
             embedding_list=json.loads(embedding_json)
             embedding=np.array(embedding_list)
             
-            logger.info("Cache hit for employee")
+            logger.info(f"Cache hit for employee {employee_id}")
             return embedding
-            return None
         
         except Exception as e:
             logger.error(f"Failed to retrieve embedding for {employee_id}: {e}")
@@ -166,7 +165,7 @@ class RedisCacheService:
                 return True
             
             else:
-                logger.info(f"Embedding not found in cache fro employee {employee_id}")
+                logger.info(f"Embedding not found in cache for employee {employee_id}")
                 return False
             
         except Exception as e:
@@ -181,13 +180,13 @@ class RedisCacheService:
             return False
         
         try:
-            #Finding all embedinngs 
+            #Finding all embeddings
             pattern="face:embedding:*"
             keys=self.redis_client.keys(pattern)
             
             if keys:
                 self.redis_client.delete(*keys)
-                logger.info(f"Cleared all embedings from cache")
+                logger.info(f"Cleared all embeddings from cache")
             else:
                 logger.info("No embeddings to clear from cache")
             return True

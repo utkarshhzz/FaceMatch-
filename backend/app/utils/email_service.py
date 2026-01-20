@@ -24,7 +24,11 @@ class EmailService:
         body:str,
         is_html:bool=False
     ):
-        
+        # Validate SMTP configuration
+        if not self.smtp_user or not self.smtp_password or not self.from_email:
+            logger.warning("Email service not configured. Skipping email send.")
+            return False
+            
         try:
             #ceating e-mail message
             message=MIMEMultipart("alternative")
