@@ -851,12 +851,12 @@ async def export_attendance(
             #addng data
             for attendance,user in records:
                 ws.append([
-                    attendance.data.strftime("%Y-%m-%d"),
+                    attendance.date.strftime("%Y-%m-%d"),
                     user.employee_id,
                     user.full_name,
                     attendance.time_in.strftime("%I:%M %p") if attendance.time_in else "",
                     attendance.time_out.strftime("%I:%M %p") if attendance.time_out else "",
-                    attendance.status,
+                    attendance.status.value if hasattr(attendance.status, 'value') else str(attendance.status),
                     attendance.date.strftime("%A")
                 ])
                 
@@ -904,4 +904,115 @@ async def export_attendance(
                 status_code=500,
                 detail=f"Failed to export : {str(e)}"
             )
-                
+
+@router.get("/employees")
+async def get_employees(authorization: str = Header(None)):
+    """Get list of all registered employees (Admin only)"""
+    
+    # Verify admin
+    current_user = await get_current_user_from_token(authorization)
+    
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=403,
+            detail="Only administrators can view employee list"
+        )
+    
+    async with AsyncSessionLocal() as db:
+        try:
+            # Get all employees (users with employee_id)
+            query = select(User).where(User.employee_id.isnot(None)).order_by(User.created_at.desc())
+            result = await db.execute(query)
+            users = result.scalars().all()
+            
+            # Format response
+            employees = [
+                {
+                    "id": user.id,
+                    "employee_id": user.employee_id,
+                    "full_name": user.full_name,
+                    "email": user.email,
+                    "is_active": user.is_active,
+                    "role": user.role.value,
+                    "created_at": user.created_at.isoformat() if user.created_at else None
+                }
+                for user in users
+            ]
+            
+            return {"employees": employees, "total": len(employees)}
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch employees: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to fetch employees: {str(e)}"
+            )
+
+
+@router.delete("/employees/{employee_id}")
+async def delete_employee(employee_id: str, authorization: str = Header(None)):
+    """Delete an employee and all associated data (Admin only)"""
+    
+    # Verify admin
+    current_user = await get_current_user_from_token(authorization)
+    
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=403,
+            detail="Only administrators can delete employees"
+        )
+    
+    async with AsyncSessionLocal() as db:
+        try:
+            # Find the employee
+            result = await db.execute(
+                select(User).where(User.employee_id == employee_id)
+            )
+            user = result.scalar_one_or_none()
+            
+            if not user:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Employee {employee_id} not found"
+                )
+            
+            # Don't allow deleting yourself
+            if user.id == current_user.id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot delete your own account"
+                )
+            
+            # Get all faces for this user
+            faces_result = await db.execute(
+                select(Face).where(Face.user_id == user.id)
+            )
+            faces = faces_result.scalars().all()
+            
+            # Delete face image files
+            for face in faces:
+                if face.original_image_path and os.path.exists(face.original_image_path):
+                    os.remove(face.original_image_path)
+                if face.processed_image_path and os.path.exists(face.processed_image_path):
+                    os.remove(face.processed_image_path)
+            
+            # Delete user (cascade will delete faces, encodings, attendance)
+            await db.delete(user)
+            await db.commit()
+            
+            logger.info(f"Deleted employee {employee_id} and all associated data")
+            
+            return {
+                "message": f"Employee {employee_id} deleted successfully",
+                "employee_id": employee_id
+            }
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"Failed to delete employee: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to delete employee: {str(e)}"
+            )                

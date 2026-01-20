@@ -64,23 +64,38 @@ export default function MatchFace() {
                 },
             });
 
-            setMatchResult(response.data);
+            console.log("Match response:", response.data);
 
-            if(response.data.match_found) {
+            // Safely set match result with null checks
+            const resultData = {
+                match_found: response.data?.match_found || response.data?.matched || false,
+                full_name: response.data?.full_name || response.data?.name || 'Unknown',
+                employee_id: response.data?.employee_id || 'N/A',
+                confidence: response.data?.confidence || 0,
+                message: response.data?.message || ''
+            };
+
+            setMatchResult(resultData);
+
+            if(resultData.match_found) {
                 toast.success('Match found!', {
-                    description: `Matched with ${response.data.full_name} (${(response.data.confidence * 100).toFixed(1)}%)`,
+                    description: `Matched with ${resultData.full_name} (${(resultData.confidence * 100).toFixed(1)}%)`,
                 });
             } else {
-                toast.info(response.data.message || "No match found.", {
+                toast.info(resultData.message || "No match found.", {
                     description: "This face is not in the database or confidence too low",
                 });
             }
         } catch (error) {
             console.error("Match error:", error);
-            const errorMsg = error.response?.data?.detail || error.message || "An error occurred";
-            toast.error("Failed to match face", {
+            const errorMsg = error.response?.data?.detail || 
+                           error.response?.data?.message || 
+                           error.message || 
+                           "An error has  occurred";
+            toast.error("Failed to match the  face", {
                 description: errorMsg
             });
+            setMatchResult(null);
         } finally {
             setLoading(false);
         }
@@ -93,13 +108,17 @@ export default function MatchFace() {
         setMatchResult(null);
     };
 
-    //confidence metrics]
-
+    //confidence metrics
     const getConfidenceColor= (confidence) => {
-        if(confidence >=0.8) return 'text-green-600 dark: text-green-400';
-        if(confidence >=0.6) return 'text-yellow-600 dark: text-yellow-400';
+        if(confidence >=0.8) return 'text-green-600 dark:text-green-400';
+        if(confidence >=0.6) return 'text-yellow-600 dark:text-yellow-400';
         return 'text-red-600 dark:text-red-400';
+    };
 
+    const getConfidenceBadge = (confidence) => {
+        if(confidence >= 0.8) return 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300';
+        if(confidence >= 0.6) return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300';
+        return 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300';
     };
 
     return (

@@ -33,9 +33,10 @@ export default function AdminDashboard() {
 
         try {
             // API call
-            const response = await api.get("/faces/attendance/export", {
+            const response = await api.get("/faces/attendance/report", {
                 responseType: 'blob'
             });
+            
 
             // Create download link
             const url = window.URL.createObjectURL(new Blob([response.data]));
