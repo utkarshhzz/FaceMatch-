@@ -23,6 +23,8 @@ RUN pip install -r requirements.txt
 
 COPY . .
 
+ENV PORT=8000
+
 RUN mkdir -p /app/data/uploads \
     /app/data/temp \
     /app/data/faces \
