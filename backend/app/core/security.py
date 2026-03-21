@@ -32,7 +32,7 @@ def create_access_token(subject:str)->str:
 def create_refresh_token(subject:str)->str:
     return _build_token(
         {"sub":subject,"type":"refresh"},
-        timedelta(days=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+        timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
         
     )
     
