@@ -230,7 +230,7 @@ export default function RegisterFace() {
                             <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-6 text-center">
                                 {previewUrl? (
                                     <div className="space-y-4">
-                                        <img src="{previewUrl}" alt="Preview" className="max-h-64 mx-auto roundedd-lg" />
+                                        <img src={previewUrl} alt="Preview" className="max-h-64 mx-auto rounded-lg" />
                                         <p className="text-sm text-muted-foreground">{selectedImage?.name}
                                              </p>
                                     </div>

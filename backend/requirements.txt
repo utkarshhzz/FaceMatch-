@@ -32,3 +32,6 @@ httpx==0.28.1
 
 pytest==8.3.4
 pytest-asyncio==0.24.0
+
+# Excel export for attendance reports (openpyxl — lightweight, pure Python)
+openpyxl==3.1.5
